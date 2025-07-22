@@ -375,7 +375,7 @@ class KungFuChess:
                             piece.current_frame = 0  # Reset animation
 
     def can_piece_act(self, piece: Piece) -> bool:
-        print(f"DEBUG: Piece at ({piece.row}, {piece.col}) state: {piece.state}")
+        # print(f"DEBUG: Piece at ({piece.row}, {piece.col}) state: {piece.state}")
         return piece.state == PieceState.IDLE
 
     def handle_player_action(self, player: Player):
