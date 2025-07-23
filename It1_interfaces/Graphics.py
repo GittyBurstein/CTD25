@@ -2,8 +2,8 @@ import pathlib
 from dataclasses import dataclass, field
 from typing import List, Dict, Tuple, Optional
 import copy
-from img import Img
-from Command import Command
+from .img import Img
+from .Command import Command
 
 class Graphics:
     def __init__(self, sprites_folder: pathlib.Path, cell_size: tuple[int, int], 
@@ -17,22 +17,14 @@ class Graphics:
         
         # Load sprites
         self.frames = []
-        print(f"[DEBUG] Checking if folder exists: {sprites_folder}")
-        print(f"[DEBUG] Absolute path: {sprites_folder.resolve()}")
         if sprites_folder.exists():
             sprite_files = sorted([f for f in sprites_folder.iterdir() 
                                  if f.suffix.lower() in ['.png', '.jpg', '.jpeg']])
-            print(f"[DEBUG] Found {len(sprite_files)} image files in {sprites_folder}")
+            
             for sprite_file in sprite_files:
-                print(f"[DEBUG] Loading sprite from: {sprite_file}")
                 img = Img().read(sprite_file, size=cell_size, keep_aspect=True)
-                if img.img is None:
-                    print(f"[ERROR] Failed to load image: {sprite_file}")
-                else:
-                    print(f"[DEBUG] Successfully loaded image: {sprite_file}")
                 self.frames.append(img)
-        else:
-            print(f"[ERROR] Sprites folder does not exist: {sprites_folder}")
+        
         self.current_frame = 0
         self.animation_start_time = 0
         self.current_command = None
