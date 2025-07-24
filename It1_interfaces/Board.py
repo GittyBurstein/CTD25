@@ -28,6 +28,7 @@ class Board:
         Returns:
             Board: A new Board instance with a copied image and same dimensions.
         """
+        print("[DEBUG] Cloning the board...")
         new_img = Img()
         new_img.img = copy.deepcopy(self.img.img)
         return Board(

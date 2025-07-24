@@ -4,10 +4,11 @@ from .State import State
 import cv2
 
 class Piece:
-    def __init__(self, piece_id: str, init_state: State):
-        """Initialize a piece with ID and initial state."""
+    def __init__(self, piece_id: str, init_state: State, piece_type: str):
+        """Initialize a piece with ID, initial state, and type."""
         self.piece_id = piece_id
         self.current_state = init_state
+        self.piece_type = piece_type  # Add piece type
         self.start_time = 0
         
         # Cooldown system
@@ -46,6 +47,9 @@ class Piece:
       sprite = self.current_state.graphics.get_img()
       x, y = self.current_state.physics.get_pos()
 
+      # Debug: Print when drawing each piece
+      print(f"[DEBUG] Drawing piece {self.piece_id} of type {self.piece_type} on board at position ({x}, {y})")
+
       try:
         sprite.draw_on(board.img, x, y)
 
@@ -64,7 +68,6 @@ class Piece:
                     board.img.img[y:y + overlay_height, x:x + board.cell_W_pix] = blended
 
       except Exception as e:
-         print(f"Warning: Could not draw piece {self.piece_id}: {e}")
+         print(f"[ERROR] Could not draw piece {self.piece_id}: {e}")
 
 
-   
