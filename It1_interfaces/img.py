@@ -12,18 +12,13 @@ class Img:
     def read(self, path: pathlib.Path, size: Optional[Tuple[int, int]] = None, keep_aspect: bool = True) -> "Img":
         """Read an image from file."""
         try:
-            # Debugging: Print the path being read
-            print(f"Attempting to load image from: {path}")
-
             # Read image with alpha channel
             self.img = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
             if self.img is None:
-                print("cv2.IMREAD_UNCHANGED failed. Trying cv2.IMREAD_COLOR...")
                 self.img = cv2.imread(str(path), cv2.IMREAD_COLOR)
 
             if self.img is None:
                 # Create a default colored rectangle if image not found
-                print("Both cv2.IMREAD_UNCHANGED and cv2.IMREAD_COLOR failed.")
                 if size:
                     w, h = size
                 else:
@@ -36,9 +31,7 @@ class Img:
                 self.img[:, :, 1] = (color_hash * 2) % 256  # G
                 self.img[:, :, 2] = (color_hash * 3) % 256  # R
                 self.img[:, :, 3] = 255  # A
-                print(f"Warning: Could not load {path}, using default colored square")
             else:
-                print("Image successfully loaded.")
 
                 # Convert to BGRA if needed
                 if len(self.img.shape) == 3:
@@ -54,7 +47,6 @@ class Img:
                 self.height, self.width = self.img.shape[:2]
 
         except Exception as e:
-            print(f"Error loading image {path}: {e}")
             # Create default image
             if size:
                 w, h = size
@@ -73,24 +65,17 @@ class Img:
         elif isinstance(target, Img):
             target_img = target.img
         else:
-            print("[ERROR] Target is not a valid image type.")
             return
 
         if self.img is None or target_img is None:
-            print("[ERROR] Source or target image is None.")
             return
 
         try:
             src_h, src_w = self.img.shape[:2]
             dst_h, dst_w = target_img.shape[:2]
 
-            # Debug: Print dimensions and positions
-            print(f"[DEBUG] Source dimensions: {src_h}x{src_w}, Target dimensions: {dst_h}x{dst_w}")
-            print(f"[DEBUG] Drawing at position ({x}, {y})")
-
             # Check bounds
             if x >= dst_w or y >= dst_h or x + src_w <= 0 or y + src_h <= 0:
-                print("[WARNING] Drawing out of bounds.")
                 return
 
             # Calculate valid regions
@@ -105,7 +90,6 @@ class Img:
             dst_y2 = dst_y1 + (src_y2 - src_y1)
 
             if src_x2 <= src_x1 or src_y2 <= src_y1:
-                print("[WARNING] Invalid source region.")
                 return
 
             src_region = self.img[src_y1:src_y2, src_x1:src_x2].astype(float)
@@ -125,9 +109,9 @@ class Img:
             target_img[dst_y1:dst_y2, dst_x1:dst_x2] = dst_region.astype(np.uint8)
 
         except Exception as e:
-            print(f"[ERROR] Error drawing image with alpha blending: {e}")
+            pass
         finally:
-            print(f"[DEBUG] Finished drawing on target at position ({x}, {y})")
+            pass
 
 
     def copy(self) -> "Img":

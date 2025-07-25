@@ -18,13 +18,17 @@ class State:
         # State-specific properties
         self.is_rest_state = False
         self.rest_duration_ms = 0
-    def copy(self):
-        # יוצרים העתק רדוד - אם רוצים העתק עמוק יש להשתמש ב copy.deepcopy
-        return State(
-            self.moves,
-            self.graphics.copy(),  # כי גרפיקס יש לה מתודת copy
-            self.physics
-        )
+    def copy(self) -> "State":
+     return State(
+        pos=self.pos,
+        piece=self.piece,
+        state=self.state,
+        rest_until=self.rest_until,
+        physics=self.physics.copy() if self.physics else None,
+        selected=self.selected,
+        time=self.time
+    )
+
     def set_transition(self, event: str, target: "State"):
         """Set a transition from this state to another state on an event."""
         self.transitions[event] = target

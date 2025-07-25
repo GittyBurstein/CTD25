@@ -1,6 +1,8 @@
 from typing import Tuple, Optional
 from .Command import Command
+from .Board import Board
 import math
+import time
 
 class Physics:
     SLIDE_CELLS_PER_SEC = 4.0
@@ -18,6 +20,8 @@ class Physics:
         
     def reset(self, cmd: Command):
         """Reset physics state with a new command."""
+        print(f"Physics reset called with command: {cmd}")
+        
         if cmd.type == "Move" and cmd.params:
             self.target_cell = cmd.params[0]
             self.is_moving = True
@@ -29,15 +33,21 @@ class Physics:
             distance = max(dr, dc)  # Use Chebyshev distance
             self.move_duration = int(distance / self.SLIDE_CELLS_PER_SEC * 1000)  # Convert to ms
 
+            print(f"Target cell set to: {self.target_cell}, Move duration: {self.move_duration}ms")
+    
     def update(self, now_ms: int):
         """Update physics state based on current time."""
         if self.is_moving:
             elapsed = now_ms - self.move_start_time
+            print(f"Physics update: elapsed={elapsed}ms, move_duration={self.move_duration}ms")
+            print(f"Current cell: {self.current_cell}, Target cell: {self.target_cell}")
             if elapsed >= self.move_duration:
+                print(f"Movement complete. Current cell updated to: {self.target_cell}")
                 # Movement complete
                 self.current_cell = self.target_cell
                 self.is_moving = False
-            # Otherwise, piece is still moving (interpolation handled in get_pos)
+            else:
+                print("Piece is still moving.")
 
     def can_be_captured(self) -> bool:
         """Check if this piece can be captured."""
