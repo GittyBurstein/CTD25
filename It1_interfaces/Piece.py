@@ -17,34 +17,33 @@ class Piece:
         
     def on_command(self, cmd: Command, now_ms: int):
         """Handle a command for this piece."""
-        print(f"[DEBUG] on_command called on {self.piece_id} with command {cmd}")
         if cmd.piece_id != self.piece_id:
             return  # Command not for this piece
-        print(f"Processing command for piece {self.piece_id}: {cmd}")
         
         # Check cooldown
         if now_ms - self.last_action_time < self.cooldown_duration:
-            print(f"Piece {self.piece_id} is in cooldown. Command ignored.")
             return  # Still in cooldown
             
         # Process command and potentially transition state
         new_state = self.current_state.get_state_after_command(cmd, now_ms)
         if new_state != self.current_state:
-            print(f"Piece {self.piece_id} state changed from {self.current_state} to {new_state}")
             self.current_state = new_state
             self.last_action_time = now_ms
+        
+        self.current_state.physics.reset(cmd)
 
     def reset(self, start_ms: int):
-       self.start_time = start_ms
-       self.last_action_time = start_ms  # לשים לב לסנכרן עם זמן המשחק
-       idle_cmd = Command.create_idle_command(start_ms, self.piece_id)
-       self.current_state.reset(idle_cmd)
+        self.start_time = start_ms
+        self.last_action_time = start_ms  # לשים לב לסנכרן עם זמן המשחק
+        idle_cmd = Command.create_idle_command(start_ms, self.piece_id)
+        self.current_state.reset(idle_cmd)
 
     def update(self, now_ms: int):
         """Update the piece state based on current time."""
         new_state = self.current_state.update(now_ms)
         if new_state != self.current_state:
             self.current_state = new_state
+        # print(f"[INFO] Piece {self.piece_id} is in state: {self.current_state.state}")
 
     def draw_on_board(self, board: Board, now_ms: int):
         """Draw the piece on the board with cooldown overlay (yellow fading)."""

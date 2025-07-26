@@ -6,7 +6,7 @@ from typing import Dict
 import time
 import copy
 class State:
-    def __init__(self, moves: Moves, graphics: Graphics, physics: Physics):
+    def __init__(self, moves: Moves, graphics: Graphics, physics: Physics, state_name: str = "idle"):
         """Initialize state with moves, graphics, and physics components."""
         self.moves = moves
         self.graphics = graphics
@@ -18,6 +18,12 @@ class State:
         # State-specific properties
         self.is_rest_state = False
         self.rest_duration_ms = 0
+
+        # Add the missing 'state' attribute and initialize it with a meaningful default value
+        self.state = state_name
+        
+        print(f"[DEBUG] State initialized with name: {self.state}")
+
     def copy(self) -> "State":
      return State(
         pos=self.pos,
@@ -63,16 +69,25 @@ class State:
         """Update the state based on current time."""
         self.graphics.update(now_ms)
         self.physics.update(now_ms)
-        
+
         # Check for automatic transitions (like rest state expiring)
-        if self.is_rest_state and self.can_transition(now_ms):
-            if "timeout" in self.transitions:
-                next_state = self.transitions["timeout"].copy()
-                # Create a dummy command for the transition
-                dummy_cmd = Command(now_ms, "", "timeout", [])
-                next_state.reset(dummy_cmd)
-                return next_state
-                
+        if self.is_rest_state:
+            elapsed = now_ms - self.state_start_time
+            if self.can_transition(now_ms):
+                if "timeout" in self.transitions:
+                    next_state = self.transitions["timeout"].copy()
+                    # Create a dummy command for the transition
+                    dummy_cmd = Command(now_ms, "", "timeout", [])
+                    next_state.reset(dummy_cmd)
+                    return next_state
+
+        # Check if the state should transition to a rest state after movement
+        if not self.is_rest_state and "timeout" in self.transitions:
+            next_state = self.transitions["timeout"].copy()
+            dummy_cmd = Command(now_ms, "", "timeout", [])
+            next_state.reset(dummy_cmd)
+            return next_state
+
         return self
 
     def get_command(self) -> Command:

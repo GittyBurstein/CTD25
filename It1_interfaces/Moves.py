@@ -38,9 +38,11 @@ class Moves:
                             dc, dr = map(int, coords_part.split(','))
                             self.move_deltas.append((dr, dc))  # store as (row_delta, col_delta)
                         except ValueError:
-                            print(f"Warning: Could not parse move line: {line}")
+                            print(f"[DEBUG] Warning: Could not parse move line: {line}")
                     else:
-                        print(f"Warning: Invalid move format: {line}")
+                        print(f"[DEBUG] Warning: Invalid move format: {line}")
+
+        print(f"[DEBUG] Loaded move deltas: {self.move_deltas}")
 
     def get_moves(self, r: int, c: int) -> List[Tuple[int, int]]:
         """
@@ -55,10 +57,14 @@ class Moves:
         """
         valid_moves = []
 
+        print(f"[DEBUG] Board dimensions: height={self.board_height}, width={self.board_width}")
+        print(f"[DEBUG] Move deltas: {self.move_deltas}")
+
         for dr, dc in self.move_deltas:
             new_r = r + dr
             new_c = c + dc
             if 0 <= new_r < self.board_height and 0 <= new_c < self.board_width:
                 valid_moves.append((new_r, new_c))
 
+        print(f"[DEBUG] Valid moves from ({r}, {c}): {valid_moves}")
         return valid_moves

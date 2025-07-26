@@ -102,7 +102,6 @@ class Game:
             # (1) Update physics & animations
             for p in self.pieces.values():
                 p.update(now)
-                # print(f"Updating piece: {p.piece_id}, is_moving={p.current_state.physics.is_moving}")
 
             # (2) Handle pygame events here (השינוי העיקרי: הוצאת קבלת האירועים מהת'רד)
             for event in pygame.event.get():
@@ -161,7 +160,8 @@ class Game:
     def _process_input(self, cmd: Command):
         """Process player input commands."""
         if cmd.piece_id in self.pieces:
-            self.pieces[cmd.piece_id].on_command(cmd)
+            now = self.game_time_ms()
+            self.pieces[cmd.piece_id].on_command(cmd, now)
 
     # ─── capture resolution ────────────────────────────────────────────────
     def _resolve_collisions(self):
@@ -213,8 +213,9 @@ class Game:
 
     def _move_selection(self, player, direction):
         # Move the selection cursor for the given player
-        print(f"[DEBUG] Selected piece: {self.selection[player]['selected']}")
         pos = self.selection[player]['pos']
+        print(f"[DEBUG] Current selection position for player {player}: {pos}")
+
         if direction == 'up' and pos[0] > 0:
             pos[0] -= 1
         elif direction == 'down' and pos[0] < self.board.H_cells - 1:
@@ -224,30 +225,44 @@ class Game:
         elif direction == 'right' and pos[1] < self.board.W_cells - 1:
             pos[1] += 1
 
+        print(f"[DEBUG] Updated selection position for player {player}: {pos}")
+        pos_tuple = tuple(pos)
+        if pos_tuple in self.pieces:
+            print(f"[INFO] Player {player} selected piece state: {self.pieces[pos_tuple].current_state.state}")
+        else:
+            print(f"[INFO] No piece at position {pos_tuple} for player {player}.")
+
     def _select_piece(self, player):
         # Select or move a piece for the given player
         pos = tuple(self.selection[player]['pos'])
         selected = self.selection[player]['selected']
+        print(f"[DEBUG] Player {player} selection position: {pos}, selected: {selected}")
+
         if selected is None:
             # First keypress: select a piece at the cursor
             for piece in self.pieces.values():
                 p_pos = tuple(piece.current_state.physics.current_cell)
                 if p_pos == pos:
                     self.selection[player]['selected'] = piece
+                    print(f"[DEBUG] Player {player} selected piece: {piece.piece_id}")
                     break
         else:
             # Second keypress: try to move selected piece to cursor position
             start_pos = tuple(selected.current_state.physics.current_cell)
             moves = selected.current_state.moves
+            valid_moves = moves.get_moves(start_pos[0], start_pos[1])
+            print(f"[DEBUG] Valid moves for piece {selected.piece_id} from {start_pos}: {valid_moves}")
             allowed = False
-            for move in getattr(moves, 'move_list', []):
-                target = (start_pos[0] + move[0], start_pos[1] + move[1])
-                if target == pos:
+            for move in valid_moves:
+                if move == pos:
                     allowed = True
                     break
             if allowed:
                 now = self.game_time_ms()
+                print(f"[DEBUG] Creating move command for piece {selected.piece_id}: start_pos={start_pos}, target_pos={pos}")
                 cmd = Command.create_move_command(now, selected.piece_id, start_pos, pos)
+                print(f"[DEBUG] Move command created: {cmd}")
                 self.user_input_queue.put(cmd)
-            # Deselect after attempt
+            else:
+                print(f"[DEBUG] Move not allowed for piece {selected.piece_id} to position {pos}")
             self.selection[player]['selected'] = None

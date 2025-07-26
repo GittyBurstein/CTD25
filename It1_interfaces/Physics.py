@@ -1,7 +1,6 @@
 from typing import Tuple, Optional
 from .Command import Command
 from .Board import Board
-import math
 import time
 
 class Physics:
@@ -20,34 +19,34 @@ class Physics:
         
     def reset(self, cmd: Command):
         """Reset physics state with a new command."""
-        print(f"Physics reset called with command: {cmd}")
-        
         if cmd.type == "Move" and cmd.params:
-            self.target_cell = cmd.params[0]
+            self.target_cell = cmd.params[1]
             self.is_moving = True
             self.move_start_time = cmd.timestamp
-            
-            # Calculate movement duration based on distance
+
             dr = abs(self.target_cell[0] - self.current_cell[0])
             dc = abs(self.target_cell[1] - self.current_cell[1])
-            distance = max(dr, dc)  # Use Chebyshev distance
-            self.move_duration = int(distance / self.SLIDE_CELLS_PER_SEC * 1000)  # Convert to ms
+            distance = max(dr, dc)
+            self.move_duration = int(distance / self.SLIDE_CELLS_PER_SEC * 1000)
+        else:
+            pass
 
-            print(f"Target cell set to: {self.target_cell}, Move duration: {self.move_duration}ms")
-    
     def update(self, now_ms: int):
         """Update physics state based on current time."""
         if self.is_moving:
             elapsed = now_ms - self.move_start_time
-            print(f"Physics update: elapsed={elapsed}ms, move_duration={self.move_duration}ms")
-            print(f"Current cell: {self.current_cell}, Target cell: {self.target_cell}")
+
             if elapsed >= self.move_duration:
-                print(f"Movement complete. Current cell updated to: {self.target_cell}")
                 # Movement complete
                 self.current_cell = self.target_cell
                 self.is_moving = False
             else:
-                print("Piece is still moving.")
+                # Calculate progress and interpolate position
+                progress = elapsed / self.move_duration
+                interpolated_row = self.current_cell[0] + (self.target_cell[0] - self.current_cell[0]) * progress
+                interpolated_col = self.current_cell[1] + (self.target_cell[1] - self.current_cell[1]) * progress
+        else:
+            pass
 
     def can_be_captured(self) -> bool:
         """Check if this piece can be captured."""
@@ -63,18 +62,18 @@ class Physics:
             # Interpolate between current and target positions
             elapsed = min(self.move_duration, time.time() * 1000 - self.move_start_time)
             progress = elapsed / self.move_duration
-            
+
             start_x = self.current_cell[1] * self.board.cell_W_pix
             start_y = self.current_cell[0] * self.board.cell_H_pix
-            target_x = self.target_cell[1] * self.board.cell_W_pix  
+            target_x = self.target_cell[1] * self.board.cell_W_pix
             target_y = self.target_cell[0] * self.board.cell_H_pix
-            
+
             current_x = int(start_x + (target_x - start_x) * progress)
             current_y = int(start_y + (target_y - start_y) * progress)
-            
+
             return (current_x, current_y)
         else:
-            # Return current cell position
-            return (self.current_cell[1] * self.board.cell_W_pix, 
+            pos = (self.current_cell[1] * self.board.cell_W_pix, 
                    self.current_cell[0] * self.board.cell_H_pix)
+            return pos
 
