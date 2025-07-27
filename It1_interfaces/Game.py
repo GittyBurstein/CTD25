@@ -27,6 +27,7 @@ class Game:
 
         # --- שינויים: אתחול pygame window להציג משחק (גודל תלוי בגודל הלוח) ---
         pygame.init()
+        pygame.font.init()  # Initialize font module
         self.window_width = self.board.W_cells * self.board.cell_W_pix
         self.window_height = self.board.H_cells * self.board.cell_H_pix
         self.screen = pygame.display.set_mode((self.window_width, self.window_height))
@@ -63,8 +64,15 @@ class Game:
         # --- שינוי: המרה מ־board_img.img (OpenCV) ל־pygame Surface ---
         # נניח ש־board_img.img הוא numpy array בצבע BGR, נהפוך ל־RGB ואז ל־Surface:
         import numpy as np
-        img_rgb = cv2.cvtColor(board_img.img, cv2.COLOR_BGR2RGB)
-        pygame_surface = pygame.surfarray.make_surface(np.flipud(np.rot90(img_rgb)))  # סיבוב והיפוך כדי להתאים pygame
+        
+        # Handle both BGR and BGRA images
+        if board_img.img.shape[2] == 4:
+            img_rgb = cv2.cvtColor(board_img.img, cv2.COLOR_BGRA2RGB)
+        else:
+            img_rgb = cv2.cvtColor(board_img.img, cv2.COLOR_BGR2RGB)
+            
+        # Create pygame surface with proper orientation
+        pygame_surface = pygame.surfarray.make_surface(img_rgb.swapaxes(0, 1))
 
         # עכשיו נוסיף ציור של הריבועים (Selection Rectangles) באמצעות pygame:
         for player in ['A', 'B']:
@@ -81,6 +89,18 @@ class Game:
                 pygame.draw.rect(pygame_surface, color, rect2, 5)
 
         self.screen.blit(pygame_surface, (0, 0))
+        
+        # Display piece states for debugging
+        font = pygame.font.Font(None, 24)
+        y_offset = 10
+        for player in ['A', 'B']:
+            selected = self.selection[player]['selected']
+            if selected:
+                state_text = f"Player {player}: {selected.piece_id} - State: {selected.current_state.state}"
+                text_surface = font.render(state_text, True, (255, 255, 255))
+                self.screen.blit(text_surface, (10, y_offset))
+                y_offset += 30
+        
         pygame.display.flip()
 
     # ─── main public entrypoint ──────────────────────────────────────────────
@@ -161,11 +181,16 @@ class Game:
         """Process player input commands."""
         if cmd.piece_id in self.pieces:
             now = self.game_time_ms()
-            self.pieces[cmd.piece_id].on_command(cmd, now)
+            piece = self.pieces[cmd.piece_id]
+            print(f"[GAME] Processing command {cmd.type} for piece {cmd.piece_id} - current state: {piece.current_state.state}")
+            piece.on_command(cmd, now)
+            print(f"[GAME] After command, piece {cmd.piece_id} state: {piece.current_state.state}")
+        else:
+            print(f"[GAME] Warning: Piece {cmd.piece_id} not found in pieces!")
 
     # ─── capture resolution ────────────────────────────────────────────────
     def _resolve_collisions(self):
-        """Resolve piece collisions and captures."""
+        """Resolve piece collisions and captures based on chess-like rules."""
         positions: Dict[tuple, List[Piece]] = {}
         to_remove = []
 
@@ -179,9 +204,105 @@ class Game:
         # Resolve collisions
         for pos, pieces_in_cell in positions.items():
             if len(pieces_in_cell) > 1:
-                survivor = pieces_in_cell[0]
-                for p in pieces_in_cell[1:]:
-                    to_remove.append(p)
+                print(f"[DEBUG] 🔥 COLLISION at {pos}: {[p.piece_id + '(' + p.color + ')' for p in pieces_in_cell]}")
+                
+                # Separate pieces by color
+                white_pieces = [p for p in pieces_in_cell if p.color == "White"]
+                black_pieces = [p for p in pieces_in_cell if p.color == "Black"]
+                
+                # CRITICAL: Same color pieces should NOT attack each other!
+                # If pieces of the same color collide, prevent the movement instead of removing pieces
+                if len(white_pieces) > 1:
+                    print(f"[DEBUG] 🚫 FRIENDLY COLLISION: Multiple white pieces at {pos} - blocking movement!")
+                    # Keep the piece that was already there (not moving)
+                    stationary_pieces = [p for p in white_pieces if not p.current_state.physics.is_moving and p.current_state.state not in ["move", "jump"]]
+                    moving_pieces = [p for p in white_pieces if p.current_state.physics.is_moving or p.current_state.state in ["move", "jump"]]
+                    
+                    if stationary_pieces and moving_pieces:
+                        # Block the moving piece by keeping it at its current position (before the collision)
+                        for moving_piece in moving_pieces:
+                            print(f"[DEBUG] 🛡️ Blocking movement of {moving_piece.piece_id} - friendly fire prevention")
+                            # Keep the piece at its current position and stop the movement
+                            moving_piece.current_state.physics.target_cell = moving_piece.current_state.physics.current_cell
+                            moving_piece.current_state.physics.is_moving = False
+                            # Force the piece back to idle state
+                            now = self.game_time_ms()
+                            idle_cmd = Command(timestamp=now, piece_id=moving_piece.piece_id, type="idle", params=[])
+                            moving_piece.on_command(idle_cmd, now)
+                    elif len(white_pieces) > 1:
+                        # If we can't determine which is moving, block all but the first by keeping them at current positions
+                        print(f"[DEBUG] ⚠️  Fallback: Blocking all white pieces except first at {pos}")
+                        for p in white_pieces[1:]:
+                            # Keep the piece at its current position and stop the movement
+                            p.current_state.physics.target_cell = p.current_state.physics.current_cell
+                            p.current_state.physics.is_moving = False
+                            # Force the piece back to idle state
+                            now = self.game_time_ms()
+                            idle_cmd = Command(timestamp=now, piece_id=p.piece_id, type="idle", params=[])
+                            p.on_command(idle_cmd, now)
+                
+                if len(black_pieces) > 1:
+                    print(f"[DEBUG] 🚫 FRIENDLY COLLISION: Multiple black pieces at {pos} - blocking movement!")
+                    # Keep the piece that was already there (not moving)
+                    stationary_pieces = [p for p in black_pieces if not p.current_state.physics.is_moving and p.current_state.state not in ["move", "jump"]]
+                    moving_pieces = [p for p in black_pieces if p.current_state.physics.is_moving or p.current_state.state in ["move", "jump"]]
+                    
+                    if stationary_pieces and moving_pieces:
+                        # Block the moving piece by keeping it at its current position (before the collision)
+                        for moving_piece in moving_pieces:
+                            print(f"[DEBUG] 🛡️ Blocking movement of {moving_piece.piece_id} - friendly fire prevention")
+                            # Keep the piece at its current position and stop the movement
+                            moving_piece.current_state.physics.target_cell = moving_piece.current_state.physics.current_cell
+                            moving_piece.current_state.physics.is_moving = False
+                            # Force the piece back to idle state
+                            now = self.game_time_ms()
+                            idle_cmd = Command(timestamp=now, piece_id=moving_piece.piece_id, type="idle", params=[])
+                            moving_piece.on_command(idle_cmd, now)
+                    elif len(black_pieces) > 1:
+                        # If we can't determine which is moving, block all but the first by keeping them at current positions
+                        print(f"[DEBUG] ⚠️  Fallback: Blocking all black pieces except first at {pos}")
+                        for p in black_pieces[1:]:
+                            # Keep the piece at its current position and stop the movement
+                            p.current_state.physics.target_cell = p.current_state.physics.current_cell
+                            p.current_state.physics.is_moving = False
+                            # Force the piece back to idle state
+                            now = self.game_time_ms()
+                            idle_cmd = Command(timestamp=now, piece_id=p.piece_id, type="idle", params=[])
+                            p.on_command(idle_cmd, now)
+                
+                # ONLY pieces of different colors can capture each other
+                if white_pieces and black_pieces:
+                    print(f"[DEBUG] ⚔️  ENEMY COLLISION: White vs Black at {pos}")
+                    # Find who moved to this position (attacker wins)
+                    attacking_piece = None
+                    defending_piece = None
+                    
+                    # Determine attacker vs defender
+                    for piece in pieces_in_cell:
+                        # Check if this piece is currently moving or just completed a move
+                        if (piece.current_state.physics.is_moving or 
+                            piece.current_state.state in ["move", "jump"]):
+                            attacking_piece = piece
+                        else:
+                            defending_piece = piece
+                    
+                    # If we can't determine attacker clearly, use the most recent mover
+                    if not attacking_piece:
+                        # Use the piece with the most recent action time as attacker
+                        if hasattr(pieces_in_cell[0], 'last_action_time'):
+                            attacking_piece = max(pieces_in_cell, key=lambda p: getattr(p, 'last_action_time', 0))
+                            defending_piece = min(pieces_in_cell, key=lambda p: getattr(p, 'last_action_time', 0))
+                        else:
+                            # Fallback: first piece attacks
+                            attacking_piece = pieces_in_cell[0]
+                            defending_piece = pieces_in_cell[1] if len(pieces_in_cell) > 1 else None
+                    
+                    # Remove the defending piece (the one being captured)
+                    if defending_piece and attacking_piece != defending_piece:
+                        to_remove.append(defending_piece)
+                        print(f"[DEBUG] ⚔️  {attacking_piece.piece_id}({attacking_piece.color}) CAPTURES {defending_piece.piece_id}({defending_piece.color})")
+                    else:
+                        print(f"[DEBUG] ⚠️  Could not determine attacker/defender clearly")
 
         # Remove captured pieces
         for p in to_remove:
@@ -189,21 +310,34 @@ class Game:
                 from It1_interfaces.EventTypes import PIECE_CAPTURED
                 self.event_bus.publish(PIECE_CAPTURED, {"piece": p})
             del self.pieces[p.piece_id]
+            print(f"[DEBUG] 🗑️  Piece {p.piece_id}({p.color}) removed from game")
 
     # ─── board validation & win detection ───────────────────────────────────
     def _is_win(self) -> bool:
         """Check if the game has ended."""
-        kings = [p for p in self.pieces.values() if p.piece_type == "King"]
-        return False  # Temporary override to allow the game to continue
+        kings = [p for p in self.pieces.values() if p.piece_type == "K"]
+        print(f"[DEBUG] Found {len(kings)} kings: {[f'{k.piece_id}({k.color})' for k in kings]}")
+        # Game ends when one or both kings are captured
+        if len(kings) < 2:
+            return True
+        return False
 
     def _announce_win(self):
         """Announce the winner."""
-        kings = [p for p in self.pieces.values() if p.piece_type == "King"]
+        kings = [p for p in self.pieces.values() if p.piece_type == "K"]
         if len(kings) == 1:
-            print(f"Game Over! {kings[0].color} wins!")
+            # One king survived - that color wins
+            winner_color = kings[0].color
+            print(f"🎉 Game Over! {winner_color} wins! 🎉")
+            print(f"The {winner_color} king survived and conquered the battlefield!")
+        elif len(kings) == 0:
+            # Both kings are dead - it's a draw
+            print("💀 Game Over! Both kings have fallen - It's a draw! 💀")
         else:
-            print("Game Over! It's a draw.")
-        print("Game Over! Press any key to close the window.")
+            # This shouldn't happen in normal gameplay
+            print("Game Over! Unexpected end condition.")
+        
+        print("Press any key to close the window.")
         # במקום cv2.waitKey, פשוט נמתין עם pygame
         waiting = True
         while waiting:
@@ -236,16 +370,20 @@ class Game:
         # Select or move a piece for the given player
         pos = tuple(self.selection[player]['pos'])
         selected = self.selection[player]['selected']
-        print(f"[DEBUG] Player {player} selection position: {pos}, selected: {selected}")
+        player_color = "White" if player == "A" else "Black"
+        print(f"[DEBUG] Player {player} (color: {player_color}) selection position: {pos}, selected: {selected}")
 
         if selected is None:
-            # First keypress: select a piece at the cursor
+            # First keypress: select a piece at the cursor that belongs to this player
             for piece in self.pieces.values():
                 p_pos = tuple(piece.current_state.physics.current_cell)
-                if p_pos == pos:
+                if p_pos == pos and hasattr(piece, 'color') and piece.color == player_color:
                     self.selection[player]['selected'] = piece
-                    print(f"[DEBUG] Player {player} selected piece: {piece.piece_id}")
+                    print(f"[DEBUG] Player {player} selected piece: {piece.piece_id} (color: {piece.color})")
+                    print(f"[DEBUG] Piece current state: {piece.current_state.state}")
                     break
+            else:
+                print(f"[DEBUG] No {player_color} piece found at position {pos} for player {player}")
         else:
             # Second keypress: try to move selected piece to cursor position
             start_pos = tuple(selected.current_state.physics.current_cell)
@@ -258,11 +396,24 @@ class Game:
                     allowed = True
                     break
             if allowed:
-                now = self.game_time_ms()
-                print(f"[DEBUG] Creating move command for piece {selected.piece_id}: start_pos={start_pos}, target_pos={pos}")
-                cmd = Command.create_move_command(now, selected.piece_id, start_pos, pos)
-                print(f"[DEBUG] Move command created: {cmd}")
-                self.user_input_queue.put(cmd)
+                # Check for friendly fire BEFORE sending the move command
+                target_piece = None
+                for piece in self.pieces.values():
+                    if tuple(piece.current_state.physics.current_cell) == pos:
+                        target_piece = piece
+                        break
+                
+                # If there's a piece at the target position with the same color, block the move
+                if target_piece and hasattr(target_piece, 'color') and hasattr(selected, 'color') and target_piece.color == selected.color:
+                    print(f"[DEBUG] 🚫 FRIENDLY FIRE PREVENTION: Cannot move {selected.piece_id}({selected.color}) to attack {target_piece.piece_id}({target_piece.color}) - same color!")
+                    # Don't send the move command at all
+                else:
+                    now = self.game_time_ms()
+                    print(f"[DEBUG] Creating move command for piece {selected.piece_id}: start_pos={start_pos}, target_pos={pos}")
+                    cmd = Command.create_move_command(now, selected.piece_id, start_pos, pos)
+                    print(f"[DEBUG] Move command created: {cmd}")
+                    self.user_input_queue.put(cmd)
+                    print(f"[DEBUG] Piece state before command: {selected.current_state.state}")
             else:
                 print(f"[DEBUG] Move not allowed for piece {selected.piece_id} to position {pos}")
             self.selection[player]['selected'] = None

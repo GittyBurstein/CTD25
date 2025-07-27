@@ -98,9 +98,14 @@ class Piece:
         
         print(f"[DEBUG] Piece {self.piece_id} received command: {cmd.type} in state: {self.current_state.state}")
         
+        # Block movement commands during long_rest
+        if self.current_state.state == "long_rest" and cmd.type in ["Move", "Jump"]:
+            print(f"[DEBUG] 🔒 Piece {self.piece_id} is resting (long_rest), blocking {cmd.type} command")
+            return  # Cannot move during rest
+        
         # Check cooldown
         if now_ms - self.last_action_time < self.cooldown_duration:
-            print(f"[DEBUG] Piece {self.piece_id} is in cooldown, ignoring command")
+            print(f"[DEBUG] Piece {self.piece_id} is in cooldown, ignoring command (cooldown remaining: {self.cooldown_duration - (now_ms - self.last_action_time)}ms)")
             return  # Still in cooldown
             
         # Process command and potentially transition state
@@ -108,13 +113,14 @@ class Piece:
         new_state = self.current_state.get_state_after_command(cmd, now_ms)
         
         if new_state != self.current_state:
-            print(f"[DEBUG] Piece {self.piece_id} transitioning from '{old_state}' to '{new_state.state}'")
+            print(f"[DEBUG] ✅ Piece {self.piece_id} transitioning from '{old_state}' to '{new_state.state}'")
             self.current_state = new_state
             self.last_action_time = now_ms
         else:
-            print(f"[DEBUG] Piece {self.piece_id} staying in state '{old_state}' (no transition found)")
+            print(f"[DEBUG] ❌ Piece {self.piece_id} staying in state '{old_state}' (no transition found)")
         
         # Reset physics for the current state (whether it changed or not)
+        print(f"[DEBUG] Resetting physics for piece {self.piece_id} with command {cmd.type}")
         self.current_state.physics.reset(cmd)
 
     def reset(self, start_ms: int):
@@ -129,12 +135,19 @@ class Piece:
         new_state = self.current_state.update(now_ms)
         
         if new_state != self.current_state:
-            print(f"[DEBUG] Piece {self.piece_id} auto-transitioned from '{old_state_name}' to '{new_state.state}'")
+            print(f"[DEBUG] 🔄 Piece {self.piece_id} auto-transitioned from '{old_state_name}' to '{new_state.state}'")
             self.current_state = new_state
+        # else:
+        #     print(f"[DEBUG] Piece {self.piece_id} staying in state '{old_state_name}'")
 
     def draw_on_board(self, board: Board, now_ms: int):
         """Draw the piece on the board with cooldown overlay (yellow fading)."""
-        sprite = self.current_state.graphics.get_img()
+        # Pass timing information for dynamic blue tint
+        sprite = self.current_state.graphics.get_img(
+            state_start_time=self.current_state.state_start_time,
+            rest_duration_ms=self.current_state.rest_duration_ms,
+            now_ms=now_ms
+        )
         x, y = self.current_state.physics.get_pos(now_ms)  # ❗ העברת now_ms
 
         try:

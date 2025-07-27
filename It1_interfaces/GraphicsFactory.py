@@ -33,8 +33,8 @@ import pathlib
 from .Graphics import Graphics
 
 class GraphicsFactory:
-    @classmethod
-    def create(cls, sprites_dir: pathlib.Path, cfg: dict = None, cell_size: tuple[int, int] = (64, 64)) -> Graphics:
+    @staticmethod
+    def create(sprites_dir: pathlib.Path, cfg: dict = None, cell_size: tuple[int, int] = (64, 64), state_name: str = "") -> Graphics:
         """
         Create a Graphics instance from sprites directory with optional config and cell size.
 
@@ -42,10 +42,12 @@ class GraphicsFactory:
             sprites_dir: Path to the folder with sprites.
             cfg: Optional config dict, may contain 'loop' (bool) and 'fps' (float).
             cell_size: Width and height in pixels of each cell (default 64x64).
+            state_name: Name of the state this graphics belongs to.
 
         Returns:
             Graphics instance.
         """
+        print(f"[DEBUG] 🏭 GraphicsFactory.create() called with state_name='{state_name}'")
         if cfg is None:
             cfg = {}
 
@@ -56,5 +58,6 @@ class GraphicsFactory:
             sprites_folder=sprites_dir,
             cell_size=cell_size,
             loop=loop,
-            fps=fps
+            fps=fps,
+            state_name=state_name
         )

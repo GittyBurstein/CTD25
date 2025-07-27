@@ -71,7 +71,8 @@ class PieceFactory:
                     graphics = self.graphics_factory.create(
                         sprites_dir, 
                         config.get(state_name, {}), 
-                        (self.board.cell_W_pix, self.board.cell_H_pix)
+                        (self.board.cell_W_pix, self.board.cell_H_pix),
+                        state_name  # Pass the state name
                     )
                     
                     # Create physics (will be customized per instance)
@@ -141,7 +142,8 @@ class PieceFactory:
             graphics = self.graphics_factory.create(
                 state_sprites_dir,
                 config.get(state_name, {}),
-                (self.board.cell_W_pix, self.board.cell_H_pix)
+                (self.board.cell_W_pix, self.board.cell_H_pix),
+                state_name  # Pass the state name
             )
             
             # Create physics
@@ -240,7 +242,20 @@ class PieceFactory:
         for state_name, template_state in template_states.items():
             # Create new components
             moves = template_state.moves  # Moves can be shared
-            graphics = template_state.graphics.copy()
+            
+            # Create NEW graphics with proper state_name (don't copy old ones)
+            # Find the sprites directory for this piece type and state
+            state_sprites_dir = self.pieces_root / p_type / "states" / state_name / "sprites"
+            if not state_sprites_dir.exists():
+                state_sprites_dir = self.pieces_root / p_type / "sprites"
+            
+            graphics = self.graphics_factory.create(
+                state_sprites_dir,
+                {},  # config
+                (self.board.cell_W_pix, self.board.cell_H_pix),
+                state_name  # Pass the state name - THIS IS THE KEY FIX!
+            )
+            
             physics = self.physics_factory.create(cell, {})
             
             # Create new state

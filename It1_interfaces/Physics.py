@@ -142,7 +142,10 @@ class Physics:
             
             print(f"[DEBUG] Physics: Starting move from {old_cell} to {self.target_cell}, duration: {self.move_duration}ms")
         else:
-            print(f"[DEBUG] Physics: Reset with non-move command: {cmd.type}")
+            # For non-move commands (like idle, complete, timeout), stop any movement
+            # but KEEP the current position - don't reset to start_cell!
+            self.is_moving = False
+            print(f"[DEBUG] Physics: Reset with non-move command: {cmd.type}, staying at current position: {self.current_cell}")
 
     def update(self, now_ms: int) -> bool:
         """Update physics state based on current time. Returns True if movement was just completed."""
