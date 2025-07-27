@@ -11,30 +11,22 @@ class Img:
 
     def read(self, path: pathlib.Path, size: Optional[Tuple[int, int]] = None, keep_aspect: bool = True) -> "Img":
         """Read an image from file."""
-        # print(f"[DEBUG] Trying to load image: {path}")  # Commented out to reduce spam
         
         try:
             # Try to read image first
             if path.exists():
-                # print(f"[DEBUG] File exists, loading...")
                 self.img = cv2.imread(str(path), cv2.IMREAD_COLOR)  # Just load as BGR, no alpha
-                # print(f"[DEBUG] Image loaded: {self.img is not None}")
                 
                 if self.img is not None:
-                    # print(f"[DEBUG] Original image shape: {self.img.shape}")
                     
                     # Resize if needed
                     if size:
-                        # print(f"[DEBUG] Resizing to: {size}")
                         self.img = cv2.resize(self.img, size)
-                        # print(f"[DEBUG] Resized image shape: {self.img.shape}")
                     
                     self.height, self.width = self.img.shape[:2]
-                    # print(f"[DEBUG] Final dimensions: {self.width}x{self.height}")
                     return self
             
             # If we get here, file doesn't exist or couldn't load
-            print(f"[DEBUG] Creating fallback image for {path}")
             if size:
                 w, h = size
             else:
@@ -43,7 +35,6 @@ class Img:
             # Create simple fallback (much smaller if memory issues)
             self.img = np.full((h, w, 3), 128, dtype=np.uint8)
             self.height, self.width = h, w
-            # print(f"[DEBUG] Created fallback image: {self.width}x{self.height}")
             
         except Exception as e:
             print(f"[ERROR] Exception in image loading: {e}")

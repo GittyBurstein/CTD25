@@ -38,11 +38,8 @@ class Moves:
                             dr, dc = map(int, coords_part.split(','))  # Fixed: row,col not col,row!
                             self.move_deltas.append((dr, dc))  # store as (row_delta, col_delta)
                         except ValueError:
-                            print(f"[DEBUG] Warning: Could not parse move line: {line}")
-                    else:
-                        print(f"[DEBUG] Warning: Invalid move format: {line}")
+                            continue  # Skip invalid format lines
 
-        print(f"[DEBUG] Loaded move deltas: {self.move_deltas}")
 
     def get_moves(self, r: int, c: int) -> List[Tuple[int, int]]:
         """
@@ -57,8 +54,6 @@ class Moves:
         """
         valid_moves = []
 
-        print(f"[DEBUG] Board dimensions: height={self.board_height}, width={self.board_width}")
-        print(f"[DEBUG] Move deltas: {self.move_deltas}")
 
         for dr, dc in self.move_deltas:
             new_r = r + dr
@@ -66,5 +61,34 @@ class Moves:
             if 0 <= new_r < self.board_height and 0 <= new_c < self.board_width:
                 valid_moves.append((new_r, new_c))
 
-        print(f"[DEBUG] Valid moves from ({r}, {c}): {valid_moves}")
         return valid_moves
+
+    def is_path_blocked(self, start_pos, end_pos, piece_type, all_pieces):
+        """Check if the path from start_pos to end_pos is blocked by other pieces."""
+        # Knights can jump over other pieces
+        if piece_type == "N":
+            return False
+        
+        start_row, start_col = start_pos
+        end_row, end_col = end_pos
+        
+        # Calculate direction of movement
+        row_dir = 0 if start_row == end_row else (1 if end_row > start_row else -1)
+        col_dir = 0 if start_col == end_col else (1 if end_col > start_col else -1)
+        
+        # Check each square along the path (excluding start and end)
+        current_row = start_row + row_dir
+        current_col = start_col + col_dir
+        
+        while (current_row, current_col) != (end_row, end_col):
+            # Check if there's a piece at this position
+            for piece in all_pieces.values():
+                piece_pos = tuple(piece.current_state.physics.current_cell)
+                if piece_pos == (current_row, current_col):
+                    return True
+            
+            # Move to next position along the path
+            current_row += row_dir
+            current_col += col_dir
+        
+        return False

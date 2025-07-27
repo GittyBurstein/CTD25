@@ -1,103 +1,3 @@
-# from typing import Tuple, Optional
-# from .Command import Command
-# from .Board import Board
-# import time
-
-# class Physics:
-#     SLIDE_CELLS_PER_SEC = 4.0
-
-#     def __init__(self, start_cell: Tuple[int, int], board: "Board", speed_m_s: float = 1.0):
-#         """Initialize physics with starting cell, board, and speed."""
-#         self.start_cell = start_cell
-#         self.current_cell = start_cell
-#         self.target_cell = start_cell
-#         self.board = board
-#         self.speed_m_s = speed_m_s
-#         self.is_moving = False
-#         self.move_start_time = 0
-#         self.move_duration = 0
-        
-#     def reset(self, cmd: Command):
-#         """Reset physics state with a new command."""
-#         if cmd.type == "Move" and cmd.params:
-#             self.target_cell = cmd.params[1]
-#             self.is_moving = True
-#             self.move_start_time = cmd.timestamp
-
-#             dr = abs(self.target_cell[0] - self.current_cell[0])
-#             dc = abs(self.target_cell[1] - self.current_cell[1])
-#             distance = max(dr, dc)
-#             self.move_duration = int(distance / self.SLIDE_CELLS_PER_SEC * 1000)
-#         else:
-#             pass
-
-#     # def update(self, now_ms: int):
-#     #     """Update physics state based on current time."""
-#     #     if self.is_moving:
-#     #         elapsed = now_ms - self.move_start_time
-
-#     #         if elapsed >= self.move_duration:
-#     #             # Movement complete
-#     #             self.current_cell = self.target_cell
-#     #             self.is_moving = False
-#     #         else:
-#     #             # Calculate progress and interpolate position
-#     #             progress = elapsed / self.move_duration
-#     #             interpolated_row = self.current_cell[0] + (self.target_cell[0] - self.current_cell[0]) * progress
-#     #             interpolated_col = self.current_cell[1] + (self.target_cell[1] - self.current_cell[1]) * progress
-#     #     else:
-#     #         pass
-#     def update(self, now_ms: int):
-#      """Update physics state based on current time."""
-#      if self.is_moving:
-#         elapsed = now_ms - self.move_start_time
-
-#         if elapsed >= self.move_duration:
-#             # Movement complete - השינוי הקריטי!
-#             self.current_cell = self.target_cell
-#             self.is_moving = False
-#             print(f"[DEBUG] Movement complete for cell {self.current_cell}")
-#             return True  # Movement completed
-#         # ...
-#      return False
-#     def can_be_captured(self) -> bool:
-#         """Check if this piece can be captured."""
-#         return not self.is_moving  # Can't capture moving pieces
-
-#     def can_capture(self) -> bool:
-#         """Check if this piece can capture other pieces."""
-#         return not self.is_moving  # Can't capture while moving
-
-#     def get_pos(self) -> Tuple[int, int]:
-#         """Current pixel-space upper-left corner of the sprite."""
-#         if self.is_moving and self.move_duration > 0:
-#             # Interpolate between current and target positions
-#             elapsed = min(self.move_duration, time.time() * 1000 - self.move_start_time)
-#             progress = elapsed / self.move_duration
-
-#             start_x = self.current_cell[1] * self.board.cell_W_pix
-#             start_y = self.current_cell[0] * self.board.cell_H_pix
-#             target_x = self.target_cell[1] * self.board.cell_W_pix
-#             target_y = self.target_cell[0] * self.board.cell_H_pix
-
-#             current_x = int(start_x + (target_x - start_x) * progress)
-#             current_y = int(start_y + (target_y - start_y) * progress)
-
-#             return (current_x, current_y)
-#         else:
-#             pos = (self.current_cell[1] * self.board.cell_W_pix, 
-#                    self.current_cell[0] * self.board.cell_H_pix)
-#             return pos
-#     def copy(self) -> "Physics":
-#      """Create a copy of this physics object."""
-#      new_physics = Physics(self.start_cell, self.board, self.speed_m_s)
-#      new_physics.current_cell = self.current_cell
-#      new_physics.target_cell = self.target_cell
-#      new_physics.is_moving = self.is_moving
-#      new_physics.move_start_time = self.move_start_time
-#      new_physics.move_duration = self.move_duration
-#      return new_physics
-
 from typing import Tuple, Optional
 from .Command import Command
 from .Board import Board
@@ -140,12 +40,10 @@ class Physics:
             distance = max(dr, dc)
             self.move_duration = int(distance / self.SLIDE_CELLS_PER_SEC * 1000)
             
-            print(f"[DEBUG] Physics: Starting move from {old_cell} to {self.target_cell}, duration: {self.move_duration}ms")
         else:
             # For non-move commands (like idle, complete, timeout), stop any movement
             # but KEEP the current position - don't reset to start_cell!
             self.is_moving = False
-            print(f"[DEBUG] Physics: Reset with non-move command: {cmd.type}, staying at current position: {self.current_cell}")
 
     def update(self, now_ms: int) -> bool:
         """Update physics state based on current time. Returns True if movement was just completed."""
@@ -154,7 +52,6 @@ class Physics:
 
             if elapsed >= self.move_duration:
                 # Movement complete - this is the critical change!
-                print(f"[DEBUG] Physics: Movement completed! Moving from {self.current_cell} to {self.target_cell}")
                 self.current_cell = self.target_cell
                 self.is_moving = False
                 return True  # Signal that movement was just completed
@@ -163,7 +60,6 @@ class Physics:
                 progress = elapsed / self.move_duration
                 # Note: We keep current_cell as the starting position until movement is complete
                 # The actual pixel position is calculated in get_pos()
-                print(f"[DEBUG] Physics: Moving... progress: {progress:.2f}")
         
         return False  # No movement completion
 

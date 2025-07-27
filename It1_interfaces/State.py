@@ -46,16 +46,12 @@ class State:
         # State name identifier
         self.state = state_name
         
-        print(f"[DEBUG] State initialized with name: {self.state}")
 
     def copy(self) -> "State":
         """Create a deep copy of this state."""
-        print(f"[DEBUG] 🔄 State.copy() called for state '{self.state}'")
         new_graphics = self.graphics.copy()
         # Fix: Ensure the copied graphics has the correct state_name
-        print(f"[DEBUG] 🔄 Before fix: new_graphics.state_name = '{new_graphics.state_name}'")
         new_graphics.state_name = self.state
-        print(f"[DEBUG] 🔄 After fix: new_graphics.state_name = '{new_graphics.state_name}'")
         new_physics = self.physics.copy()
     
         new_state = State(self.moves, new_graphics, new_physics, self.state)
@@ -68,7 +64,6 @@ class State:
     def set_transition(self, event: str, target: "State"):
         """Set a transition from this state to another state on an event."""
         self.transitions[event] = target
-        print(f"[DEBUG] Set transition: {self.state} --{event}--> {target.state}")
 
     def reset(self, cmd: Command):
         """Reset the state with a new command."""
@@ -76,14 +71,12 @@ class State:
         self.state_start_time = cmd.timestamp
         self.graphics.reset(cmd)
         self.physics.reset(cmd)
-        print(f"[DEBUG] State '{self.state}' reset with command: {cmd.type}")
 
     def can_transition(self, now_ms: int) -> bool:
         """Check if the state can transition."""
         if self.is_rest_state:
             elapsed = now_ms - self.state_start_time
             can_transition = elapsed >= self.rest_duration_ms
-            print(f"[DEBUG] Rest state '{self.state}' can transition: {can_transition} (elapsed: {elapsed}ms, required: {self.rest_duration_ms}ms)")
             return can_transition
         else:
             # Non-rest states can always transition
@@ -92,12 +85,10 @@ class State:
     def get_state_after_command(self, cmd: Command, now_ms: int) -> "State":
         """Get the next state after processing a command."""
         if not self.can_transition(now_ms):
-            print(f"[DEBUG] State '{self.state}' cannot transition yet (in cooldown/rest)")
             return self  # Stay in current state if can't transition
             
         if cmd.type in self.transitions:
             template_state = self.transitions[cmd.type]
-            print(f"[DEBUG] State '{self.state}' transitioning to '{template_state.state}' via command '{cmd.type}'")
             
             # CRITICAL: Create NEW instance instead of using template
             next_state = self.copy()
@@ -114,7 +105,6 @@ class State:
                 template_state.graphics.sprites_folder, 
                 template_state.state
             )
-            print(f"[DEBUG] 🎯 Manual transition: Corrected sprites folder from '{template_state.graphics.sprites_folder}' to '{correct_sprites_folder}' for state '{template_state.state}'")
             
             next_state.graphics = GraphicsFactory.create(
                 correct_sprites_folder,  # Use corrected sprites folder
@@ -122,19 +112,15 @@ class State:
                 template_state.graphics.cell_size,  # Use same cell size
                 template_state.state  # CRITICAL: Pass the correct state name!
             )
-            print(f"[DEBUG] Created NEW graphics for state '{template_state.state}' with state_name: '{next_state.graphics.state_name}'")
-            print(f"[DEBUG] New graphics object ID: {id(next_state.graphics)}")
             
             # CRITICAL: Copy current physics state to the next state
             if hasattr(self.physics, 'current_cell'):
                 next_state.physics.current_cell = self.physics.current_cell
                 next_state.physics.target_cell = self.physics.target_cell
-                print(f"[DEBUG] Copied position {self.physics.current_cell} to next state '{next_state.state}'")
             
             next_state.reset(cmd)
             return next_state
         else:
-            print(f"[DEBUG] State '{self.state}' has no transition for command '{cmd.type}'. Available: {list(self.transitions.keys())}")
             return self
 
     def update(self, now_ms: int) -> "State":
@@ -144,7 +130,6 @@ class State:
         
         # Check if movement was completed and we should transition
         if movement_complete and "complete" in self.transitions:
-            print(f"[DEBUG] Movement completed in state '{self.state}', transitioning via 'complete'")
             template_state = self.transitions["complete"]
             
             # CRITICAL: Create NEW instance instead of using template
@@ -162,7 +147,6 @@ class State:
                 template_state.graphics.sprites_folder, 
                 template_state.state
             )
-            print(f"[DEBUG] 🎯 Auto-complete transition: Corrected sprites folder from '{template_state.graphics.sprites_folder}' to '{correct_sprites_folder}' for state '{template_state.state}'")
             
             next_state.graphics = GraphicsFactory.create(
                 correct_sprites_folder,  # Use corrected sprites folder
@@ -170,13 +154,11 @@ class State:
                 template_state.graphics.cell_size,  # Use same cell size
                 template_state.state  # CRITICAL: Pass the correct state name!
             )
-            print(f"[DEBUG] Created NEW graphics for auto-transition '{template_state.state}' with state_name: '{next_state.graphics.state_name}'")
             
             # CRITICAL: Copy current physics state to the next state
             if hasattr(self.physics, 'current_cell'):
                 next_state.physics.current_cell = self.physics.current_cell
                 next_state.physics.target_cell = self.physics.target_cell
-                print(f"[DEBUG] Copied position {self.physics.current_cell} to next state '{next_state.state}'")
             
             # Create a completion command
             completion_cmd = Command(now_ms, "", "complete", [])
@@ -186,7 +168,6 @@ class State:
         # Check for automatic transitions (like rest state expiring)
         if self.is_rest_state and self.can_transition(now_ms):
             if "timeout" in self.transitions:
-                print(f"[DEBUG] Rest state '{self.state}' timeout, transitioning to '{self.transitions['timeout'].state}'")
                 template_state = self.transitions["timeout"]
                 
                 # CRITICAL: Create NEW instance instead of using template
@@ -204,7 +185,6 @@ class State:
                     template_state.graphics.sprites_folder, 
                     template_state.state
                 )
-                print(f"[DEBUG] 🎯 Timeout transition: Corrected sprites folder from '{template_state.graphics.sprites_folder}' to '{correct_sprites_folder}' for state '{template_state.state}'")
                 
                 next_state.graphics = GraphicsFactory.create(
                     correct_sprites_folder,  # Use corrected sprites folder
@@ -212,25 +192,25 @@ class State:
                     template_state.graphics.cell_size,  # Use same cell size
                     template_state.state  # CRITICAL: Pass the correct state name!
                 )
-                print(f"[DEBUG] Created NEW graphics for timeout-transition '{template_state.state}' with state_name: '{next_state.graphics.state_name}'")
                 
                 # CRITICAL: Copy current physics state to the next state
                 if hasattr(self.physics, 'current_cell'):
                     next_state.physics.current_cell = self.physics.current_cell
                     next_state.physics.target_cell = self.physics.target_cell
-                    print(f"[DEBUG] Copied position {self.physics.current_cell} to next state '{next_state.state}'")
                 
                 # Create a timeout command for the transition
                 timeout_cmd = Command(now_ms, "", "timeout", [])
                 next_state.reset(timeout_cmd)
                 return next_state
-            else:
-                print(f"[DEBUG] Rest state '{self.state}' timed out but no timeout transition defined")
-
+        
+        # Auto-completion checks
         if self.state == "move":
-            print(f"[DEBUG] Graphics loaded for MOVE state: {self.graphics}")
+            # Check if movement is complete
+            if not self.physics.is_moving:
+                return self.get_state_after_command(Command(now_ms, "", "complete", []), now_ms)
         elif self.state == "long_rest":
-            print(f"[DEBUG] Graphics loaded for LONG_REST state: {self.graphics} (state_name: {self.graphics.state_name})")
+            # Long rest states handle their own timeout above
+            pass
 
         return self
     

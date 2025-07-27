@@ -19,14 +19,8 @@ class SoundManager:
             for event_type, sound_file in self.sounds.items():
                 if os.path.exists(sound_file):
                     self.available_sounds[event_type] = sound_file
-                    print(f"[SoundManager] 🔊 Loaded sound for {event_type}: {sound_file}")
-                else:
-                    print(f"[SoundManager] ⚠️  Sound file not found for {event_type}: {sound_file}")
-            
-            print(f"[SoundManager] 🎵 Sound system initialized - {len(self.available_sounds)}/{len(self.sounds)} sounds available")
             
         except Exception as e:
-            print(f"[SoundManager] ❌ Sound system disabled due to error: {e}")
             self.sounds_enabled = False
             self.available_sounds = {}
 
@@ -41,11 +35,8 @@ class SoundManager:
                 pygame.mixer.music.stop()
                 pygame.mixer.music.load(sound_file)
                 pygame.mixer.music.play()
-                print(f"[SoundManager] 🔊 Playing sound for {event_type}")
             except Exception as e:
-                print(f"[SoundManager] ⚠️  Error playing sound for {event_type}: {e}")
-        else:
-            print(f"[SoundManager] 🔇 No sound available for event: {event_type}")
+                pass
     
     def play_custom_sound(self, sound_file):
         """Play a custom sound file."""
@@ -57,11 +48,8 @@ class SoundManager:
                 pygame.mixer.music.stop()
                 pygame.mixer.music.load(sound_file)
                 pygame.mixer.music.play()
-                print(f"[SoundManager] 🔊 Playing custom sound: {sound_file}")
                 return True
             else:
-                print(f"[SoundManager] ⚠️  Custom sound file not found: {sound_file}")
                 return False
         except Exception as e:
-            print(f"[SoundManager] ❌ Error playing custom sound: {e}")
             return False

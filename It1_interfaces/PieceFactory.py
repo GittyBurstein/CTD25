@@ -33,13 +33,11 @@ class PieceFactory:
                 try:
                     states = self._build_state_machine(piece_dir)
                     self.piece_templates[piece_dir.name] = states
-                    print(f"[DEBUG] Built template for piece type: {piece_dir.name} with states: {list(states.keys())}")
                 except Exception as e:
                     print(f"Warning: Could not build template for {piece_dir.name}: {e}")
 
     def _build_state_machine(self, piece_dir: pathlib.Path) -> Dict[str, State]:
         """Build a state machine for a piece from its directory."""
-        print(f"[DEBUG] Building state machine for {piece_dir.name}")
         
         # Load moves
         moves_file = piece_dir / "moves.txt"
@@ -60,11 +58,9 @@ class PieceFactory:
         states = {}
         
         if states_dir.exists() and states_dir.is_dir():
-            print(f"[DEBUG] Found states directory: {states_dir}")
             for state_dir in states_dir.iterdir():
                 if state_dir.is_dir():
                     state_name = state_dir.name
-                    print(f"[DEBUG] Building state: {state_name}")
                     
                     # Load graphics from state-specific sprites directory
                     sprites_dir = state_dir / "sprites"
@@ -94,12 +90,10 @@ class PieceFactory:
                     
                     states[state_name] = state
                     # Debugging: Verify state creation
-                    print(f"[DEBUG] Created state: {state_name}")
         
         # If no states found or missing critical states, create them programmatically
         missing_states = self._get_missing_states(states)
         if missing_states:
-            print(f"[DEBUG] Creating missing states programmatically: {missing_states}")
             self._create_missing_states(piece_dir, states, moves, config, missing_states)
         
         # Set up transitions between states
@@ -117,7 +111,6 @@ class PieceFactory:
                 missing.append(state_name)
         
         # Debugging: Verify missing states
-        print(f"[DEBUG] Missing states: {missing}")
         
         return missing
     
@@ -126,7 +119,6 @@ class PieceFactory:
         """Create missing states programmatically."""
         
         for state_name in missing_states:
-            print(f"[DEBUG] Creating programmatic state: {state_name}")
             
             # Try to load state-specific graphics first
             state_sprites_dir = piece_dir / "states" / state_name / "sprites"
@@ -134,9 +126,6 @@ class PieceFactory:
             if not state_sprites_dir.exists():
                 # Fallback to general sprites directory
                 state_sprites_dir = piece_dir / "sprites"
-                print(f"[DEBUG] Using fallback sprites directory for {state_name}: {state_sprites_dir}")
-            else:
-                print(f"[DEBUG] Using state-specific sprites for {state_name}: {state_sprites_dir}")
             
             # Create graphics for this specific state
             graphics = self.graphics_factory.create(
@@ -156,83 +145,65 @@ class PieceFactory:
             if state_name == "long_rest":
                 state.is_rest_state = True
                 state.rest_duration_ms = 2000
-                print(f"[DEBUG] Configured {state_name} as rest state with 2000ms duration")
             elif state_name == "short_rest":
                 state.is_rest_state = True
                 state.rest_duration_ms = 1000
-                print(f"[DEBUG] Configured {state_name} as rest state with 1000ms duration")
             
             states[state_name] = state
             # Debugging: Verify state creation
-            print(f"[DEBUG] Created state: {state_name}")
 
     def _setup_transitions(self, states: Dict[str, State]):
         """Set up transitions between states."""
-        print(f"[DEBUG] Setting up transitions for states: {list(states.keys())}")
         
         # Basic transitions for movement
         if "idle" in states:
             if "move" in states:
                 # Debugging: Verify available states
-                print(f"[DEBUG] Available states: {list(states.keys())}")
 
                 # Debugging: Verify transition from 'idle' to 'move'
                 if "idle" in states and "move" in states:
-                    print(f"[DEBUG] Adding transition from 'idle' to 'move'")
                     states["idle"].set_transition("Move", states["move"])
-                    print("[DEBUG] Set up idle -> move transition")
             
             if "jump" in states:
                 states["idle"].set_transition("Jump", states["jump"])
-                print("[DEBUG] Set up idle -> jump transition")
                 
             if "attack" in states:
                 states["idle"].set_transition("Attack", states["attack"])
-                print("[DEBUG] Set up idle -> attack transition")
         
         # Move completion transitions
         if "move" in states:
             if "long_rest" in states:
                 states["move"].set_transition("complete", states["long_rest"])
-                print("[DEBUG] Set up move -> long_rest transition")
             elif "idle" in states:
                 states["move"].set_transition("complete", states["idle"])
-                print("[DEBUG] Set up move -> idle transition (fallback)")
         
         # Jump completion transitions
         if "jump" in states:
             if "short_rest" in states:
                 states["jump"].set_transition("complete", states["short_rest"])
-                print("[DEBUG] Set up jump -> short_rest transition")
             elif "idle" in states:
                 states["jump"].set_transition("complete", states["idle"])
-                print("[DEBUG] Set up jump -> idle transition (fallback)")
         
         # Rest state timeout transitions
         if "long_rest" in states and "idle" in states:
             states["long_rest"].set_transition("timeout", states["idle"])
-            print("[DEBUG] Set up long_rest -> idle timeout transition")
         
         if "short_rest" in states and "idle" in states:
             states["short_rest"].set_transition("timeout", states["idle"])
-            print("[DEBUG] Set up short_rest -> idle timeout transition")
         
         # Attack completion
         if "attack" in states and "idle" in states:
             states["attack"].set_transition("complete", states["idle"])
-            print("[DEBUG] Set up attack -> idle transition")
         
         # Print all transitions for debugging
         for state_name, state in states.items():
             transitions_list = list(state.transitions.keys())
-            print(f"[DEBUG] State '{state_name}' has transitions: {transitions_list}")
 
     def create_piece(self, p_type: str, cell: Tuple[int, int]) -> Piece:
         """Create a piece of the specified type at the given cell."""
         if p_type not in self.piece_templates:
             raise ValueError(f"Unknown piece type: {p_type}")
         
-        print(f"[DEBUG] Creating piece of type {p_type} at {cell}")
         
         # Clone the template state machine
         template_states = self.piece_templates[p_type]
@@ -270,7 +241,6 @@ class PieceFactory:
                 target_state_name = target_template.state
                 if target_state_name in new_states:
                     new_states[state_name].set_transition(event, new_states[target_state_name])
-                    print(f"[DEBUG] Set transition: {state_name} --{event}--> {target_state_name}")
         
         # Get the initial state (idle by default)
         initial_state = new_states.get("idle", list(new_states.values())[0])
@@ -279,8 +249,6 @@ class PieceFactory:
         piece_id = f"{p_type}_{cell[0]}_{cell[1]}_{id(initial_state)}"
         
         piece = Piece(piece_id, initial_state, p_type)
-        print(f"[DEBUG] Created piece: {piece_id} of type {p_type} at {cell} in state '{initial_state.state}'")
         # Debugging: Verify initial state transitions
-        print(f"[DEBUG] Initial state transitions: {list(initial_state.transitions.keys())}")
         
         return piece

@@ -12,7 +12,6 @@ class ScoreManager:
             "K": 100  # King (game-ending value)
         }
         self.moves_count = {"White": 0, "Black": 0}
-        print("[ScoreManager] 📊 Score tracking system initialized")
     
     def update(self, event_type, data):
         if event_type == PIECE_CAPTURED:
@@ -24,8 +23,6 @@ class ScoreManager:
                 piece_value = self.piece_values.get(piece.piece_type, 1)
                 
                 self.score[capturing_color] += piece_value
-                print(f"[ScoreManager] 🎯 {capturing_color} scored {piece_value} points for capturing {piece.piece_id}({captured_color} {piece.piece_type})")
-                print(f"[ScoreManager] 📊 Current Score - White: {self.score['White']}, Black: {self.score['Black']}")
                 
         elif event_type == MOVE_DONE:
             command = data.get("command")
@@ -36,7 +33,6 @@ class ScoreManager:
                     self.moves_count["White"] += 1
                 elif "B" in piece_id:
                     self.moves_count["Black"] += 1
-                print(f"[ScoreManager] 🎯 Move completed by {piece_id} - White moves: {self.moves_count['White']}, Black moves: {self.moves_count['Black']}")
     
     def get_score(self):
         """Get current scores."""
