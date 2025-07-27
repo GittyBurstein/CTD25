@@ -85,6 +85,18 @@ class Piece:
         self.piece_type = piece_type
         self.start_time = 0
         
+        # Track piece color from piece_id (PW/PB prefix)
+        if piece_id.startswith('PW') or piece_id.startswith('RW') or piece_id.startswith('NW') or piece_id.startswith('BW') or piece_id.startswith('QW') or piece_id.startswith('KW'):
+            self.color = "White"
+        elif piece_id.startswith('PB') or piece_id.startswith('RB') or piece_id.startswith('NB') or piece_id.startswith('BB') or piece_id.startswith('QB') or piece_id.startswith('KB'):
+            self.color = "Black"
+        else:
+            self.color = "Unknown"
+        
+        # Movement tracking for pawns (first move rule)
+        self.move_count = 0
+        self.has_moved = False
+        
         # Cooldown system
         self.last_action_time = 0
         self.cooldown_duration = 2000  # 2 seconds in ms
@@ -107,6 +119,19 @@ class Piece:
         if now_ms - self.last_action_time < self.cooldown_duration:
             print(f"[DEBUG] Piece {self.piece_id} is in cooldown, ignoring command (cooldown remaining: {self.cooldown_duration - (now_ms - self.last_action_time)}ms)")
             return  # Still in cooldown
+        
+        # Special handling for pawn double move (only on first move)
+        if self.piece_type == "P" and cmd.type == "Move":
+            source = cmd.get_source_cell()
+            target = cmd.get_target_cell()
+            if source and target:
+                row_diff = abs(target[0] - source[0])
+                # If trying to move 2 squares and already moved before
+                if row_diff == 2 and self.has_moved:
+                    print(f"[DEBUG] 🚫 Pawn {self.piece_id} cannot move 2 squares - already moved before!")
+                    return  # Block double move after first move
+                elif row_diff >= 1:  # Any valid move
+                    print(f"[DEBUG] ✅ Pawn {self.piece_id} moving {row_diff} square(s). First move: {not self.has_moved}")
             
         # Process command and potentially transition state
         old_state = self.current_state.state
@@ -116,6 +141,12 @@ class Piece:
             print(f"[DEBUG] ✅ Piece {self.piece_id} transitioning from '{old_state}' to '{new_state.state}'")
             self.current_state = new_state
             self.last_action_time = now_ms
+            
+            # Track movement for pawns
+            if cmd.type in ["Move", "Jump"]:
+                self.move_count += 1
+                self.has_moved = True
+                print(f"[DEBUG] 📊 Piece {self.piece_id} move count: {self.move_count}")
         else:
             print(f"[DEBUG] ❌ Piece {self.piece_id} staying in state '{old_state}' (no transition found)")
         
@@ -126,6 +157,9 @@ class Piece:
     def reset(self, start_ms: int):
         self.start_time = start_ms
         self.last_action_time = start_ms
+        # Reset movement tracking
+        self.move_count = 0
+        self.has_moved = False
         idle_cmd = Command.create_idle_command(start_ms, self.piece_id)
         self.current_state.reset(idle_cmd)
 

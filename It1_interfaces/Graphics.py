@@ -16,7 +16,6 @@ class Graphics:
         self.fps = fps
         self.frame_duration_ms = int(1000 / fps)
         self.state_name = state_name  # Track which state this graphics is for
-        print(f"[DEBUG] 🎨 Graphics.__init__: created with state_name='{state_name}'")
         
         # Load sprites
         self.frames = []
@@ -79,7 +78,6 @@ class Graphics:
                 remaining_ms = max(0, rest_duration_ms - elapsed_ms)
                 intensity_ratio = remaining_ms / rest_duration_ms
                 
-                print(f"[DEBUG] 🔵 Graphics: Blue tint intensity {intensity_ratio:.2f} (remaining: {remaining_ms}ms/{rest_duration_ms}ms)")
                 return current_img.apply_blue_tint(intensity=intensity_ratio)
             else:
                 return current_img

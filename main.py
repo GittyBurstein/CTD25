@@ -112,8 +112,9 @@ def main():
     if king_count != 2:
         exit(1)
 
-    # Create the game instance
-    game = Game(pieces=pieces, board=board, event_bus=event_bus)
+    # Create the game instance with managers
+    game = Game(pieces=pieces, board=board, event_bus=event_bus, 
+                score_manager=score_manager, move_logger=move_logger)
 
     game.run()
 

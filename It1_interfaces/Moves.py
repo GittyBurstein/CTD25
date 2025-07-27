@@ -35,7 +35,7 @@ class Moves:
 
                     if ',' in coords_part:
                         try:
-                            dc, dr = map(int, coords_part.split(','))
+                            dr, dc = map(int, coords_part.split(','))  # Fixed: row,col not col,row!
                             self.move_deltas.append((dr, dc))  # store as (row_delta, col_delta)
                         except ValueError:
                             print(f"[DEBUG] Warning: Could not parse move line: {line}")
