@@ -11,13 +11,13 @@ from io import StringIO
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 def run_all_tests():
-    """🧪 מריץ את כל הטסטים ומדווח על התוצאות"""
+"""🧪 Runs all tests and reports results"""
     
     print("🧪" + "="*60)
-    print("🧪 מריץ את כל הטסטים במערכת")
+print("🧪 Runs all tests in the system")
     print("🧪" + "="*60)
     
-    # List of all test modules - כולל הטסטים החדשים המקיפים
+# List of all test modules - including הטסטים החדשים המקיפים
     test_modules = [
         'test_command',
         'test_game', 
@@ -40,7 +40,7 @@ def run_all_tests():
     results = {}
     
     for module_name in test_modules:
-        print(f"\n🧪 מריץ טסטים עבור {module_name}...")
+print(f"\n🧪 running tests for {module_name}...")
         print("-" * 50)
         
         try:
@@ -75,23 +75,23 @@ def run_all_tests():
             
             # Print summary for this module
             if failures == 0 and errors == 0:
-                print(f"✅ {module_name}: {tests_run} טסטים עברו בהצלחה!")
+print(f"✅ {module_name}: {tests_run} tests passed successfully!")
             else:
-                print(f"❌ {module_name}: {tests_run} טסטים, {failures} כשלונות, {errors} שגיאות")
+print(f"❌ {module_name}: {tests_run} tests, {failures} failures, {errors} errors")
                 
                 # Print failure details
                 if result.failures:
-                    print("   כשלונות:")
+print(" failures:")
                     for test, traceback in result.failures:
                         print(f"     - {test}: {traceback.split('AssertionError:')[-1].strip()}")
                 
                 if result.errors:
-                    print("   שגיאות:")
+print(" errors:")
                     for test, traceback in result.errors:
                         print(f"     - {test}: {traceback.split('Error:')[-1].strip()}")
             
         except ImportError as e:
-            print(f"❌ לא ניתן לטעון את {module_name}: {e}")
+print(f"❌ no ניתן לטעון the {module_name}: {e}")
             results[module_name] = {
                 'tests_run': 0,
                 'failures': 0,
@@ -101,7 +101,7 @@ def run_all_tests():
             total_errors += 1
         
         except Exception as e:
-            print(f"❌ שגיאה בהרצת טסטים עבור {module_name}: {e}")
+print(f"❌ error בהרצת tests for {module_name}: {e}")
             results[module_name] = {
                 'tests_run': 0,
                 'failures': 0,
@@ -112,37 +112,37 @@ def run_all_tests():
     
     # Print final summary
     print("\n" + "="*60)
-    print("🧪 סיכום כל הטסטים")
+print("🧪 summary all הטסטים")
     print("="*60)
     
     successful_modules = 0
     for module_name, result in results.items():
         if result['success']:
-            print(f"✅ {module_name}: {result['tests_run']} טסטים")
+print(f"✅ {module_name}: {result['tests_run']} tests")
             successful_modules += 1
         else:
-            print(f"❌ {module_name}: {result['tests_run']} טסטים, {result['failures']} כשלונות, {result['errors']} שגיאות")
+print(f"❌ {module_name}: {result['tests_run']} tests, {result['failures']} failures, {result['errors']} errors")
     
     print("-" * 60)
-    print(f"📊 סה\"כ: {total_tests} טסטים")
-    print(f"✅ מודולים מוצלחים: {successful_modules}/{len(test_modules)}")
-    print(f"❌ כשלונות: {total_failures}")
-    print(f"❌ שגיאות: {total_errors}")
+print(f"📊 סה\"כ: {total_tests} tests")
+print(f"✅ מודולים מוצלחים: {successful_modules}/{len(test_modules)}")
+print(f"❌ failures: {total_failures}")
+print(f"❌ errors: {total_errors}")
     
     success_rate = (total_tests - total_failures - total_errors) / max(total_tests, 1) * 100
-    print(f"📈 אחוז הצלחה: {success_rate:.1f}%")
+print(f"📈 אחוז success: {success_rate:.1f}%")
     
     if total_failures == 0 and total_errors == 0:
-        print("\n🎉 כל הטסטים עברו בהצלחה! 🎉")
+print("\n🎉 All tests passed successfully! 🎉")
         return True
     else:
-        print(f"\n⚠️  יש {total_failures + total_errors} בעיות שצריך לטפל בהן")
+print(f"\n⚠️ there is {total_failures + total_errors} בעיות שצריך לטפל בהן")
         return False
 
 
 def run_specific_test(test_name):
-    """🧪 מריץ טסט ספציפי"""
-    print(f"🧪 מריץ טסט ספציפי: {test_name}")
+"""🧪 running test ספציפי"""
+print(f"🧪 running test ספציפי: {test_name}")
     print("-" * 50)
     
     try:
@@ -153,14 +153,14 @@ def run_specific_test(test_name):
         result = runner.run(suite)
         
         if result.wasSuccessful():
-            print(f"✅ טסט {test_name} עבר בהצלחה!")
+print(f"✅ test {test_name} passed successfully!")
             return True
         else:
-            print(f"❌ טסט {test_name} נכשל")
+print(f"❌ test {test_name} failed")
             return False
             
     except ImportError:
-        print(f"❌ לא ניתן למצוא טסט: {test_name}")
+print(f"❌ no ניתן למצוא test: {test_name}")
         return False
 
 

@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pathlib
 
-# הוספת הנתיב של It1_interfaces אל נתיב החיפוש
+# הוספת הנתיב of It1_interfaces אל path החיפוש
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from img import Img

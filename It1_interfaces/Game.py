@@ -7,7 +7,7 @@ from It1_interfaces.Board import Board
 from It1_interfaces.Command import Command
 from It1_interfaces.Piece import Piece
 from It1_interfaces.img import Img
-from It1_interfaces.GameUI import GameUI
+from It1_interfaces.GameUI_short import GameUI
 from It1_interfaces.StatisticsManager import StatisticsManager
 from It1_interfaces.ThreadedInputManager import ThreadedInputManager
 from It1_interfaces.EventTypes import GAME_STARTED, GAME_ENDED, MOVE_DONE, PIECE_CAPTURED
@@ -34,12 +34,12 @@ class Game:
         self.cell_width = self.board.cell_W_pix
         self.cell_height = self.board.cell_H_pix
 
-        # --- שינויים: אתחול pygame window להציג משחק (גודל תלוי בגודל הלוח) ---
+# --- שינויים: initialization pygame window להציג game (size תלוי בגודל הלוח) ---
         pygame.init()
         pygame.font.init()  # Initialize font module
         self.board_width = self.board.W_cells * self.cell_width
         self.board_height = self.board.H_cells * self.cell_height
-        self.info_panel_width = 250  # רוחב כל פאנל מידע (שניים)
+        self.info_panel_width = 300  # רוחב כל פאנל מידע (שניים) - הגדלנו מ-250
         self.window_width = self.board_width + (2 * self.info_panel_width)  # פאנל משמאל ומימין
         self.window_height = self.board_height
         self.screen = pygame.display.set_mode((self.window_width, self.window_height))
@@ -47,7 +47,7 @@ class Game:
         self.clock = pygame.time.Clock()
         self._should_quit = False
         
-        # אתחול ממשק המשתמש
+        # Initialize UI
         self.ui = GameUI(self.info_panel_width)
 
     # ─── helpers ─────────────────────────────────────────────────────────────
@@ -75,7 +75,7 @@ class Game:
         # Get player selections once
         selection = self.input_manager.get_all_selections()
 
-        # --- שינוי: המרה מ־board_img.img (OpenCV) ל־pygame Surface ---
+# --- שינוי: המרה מ־board_img.img (OpenCV) ל־pygame Surface ---
         
         # Handle both BGR and BGRA images
         if board_img.img.shape[2] == 4:
@@ -86,7 +86,7 @@ class Game:
         # Create pygame surface with proper orientation
         pygame_surface = pygame.surfarray.make_surface(img_rgb.swapaxes(0, 1))
 
-        # ציור ריבועי הבחירה על הלוח
+# draw ריבועי הבחירה על הלוח
         for player in ['A', 'B']:
             pos = selection[player]['pos']
             color = selection[player]['color']
@@ -100,11 +100,11 @@ class Game:
                                     self.cell_width, self.cell_height)
                 pygame.draw.rect(pygame_surface, color, rect2, 5)
 
-        # הצגת הלוח במיקום הנכון (אמצע המסך)
+# showing הלוח במיקום הנכון (אמצע המסך)
         board_x_offset = self.info_panel_width  # הזחה כדי לשים את הלוח באמצע
         self.screen.blit(pygame_surface, (board_x_offset, 0))
         
-        # ציור שני פאנלי המידע באמצעות GameUI
+# draw second פאנלי המידע באמצעות GameUI
         self.ui.draw_player_panels(self.screen, self.board_width, self.window_height, 
                                   self.pieces, selection, self.start_time, 
                                   self.score_manager, self.move_logger)
@@ -164,7 +164,7 @@ class Game:
             # (4) Detect captures
             self._resolve_collisions()
 
-            # הגבלת פריימרייט
+# הגבלת פריימרייט
             self.clock.tick(30)
 
         # ═══════════ STOP THREADED INPUT MANAGER ═══════════
@@ -299,7 +299,7 @@ class Game:
             print("Game Over! Unexpected end condition.")
         
         print("Press any key to close the window.")
-        # במקום cv2.waitKey, פשוט נמתין עם pygame
+# במקום cv2.waitKey, simple נמתין with pygame
         waiting = True
         while waiting:
             for event in pygame.event.get():

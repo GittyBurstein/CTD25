@@ -33,10 +33,10 @@ except ImportError as e:
 
 @unittest.skipUnless(HAS_IMPORTS, "Required imports not available")
 class TestHelperFunctions(unittest.TestCase):
-    """🔧 טסטים לפונקציות עזר של State module"""
+"""🔧 tests לפונקציות עזר of State module"""
     
     def test_extract_piece_type_from_sprites_path_string(self):
-        """🧪 בדיקת חילוץ סוג כלי מנתיב string"""
+"""🧪 checking חילוץ סוג piece מנתיב string"""
         test_cases = [
             ("pieces/PW/states/idle/sprites", "PW"),
             ("pieces/BB/states/move/sprites", "BB"),
@@ -51,13 +51,13 @@ class TestHelperFunctions(unittest.TestCase):
                 self.assertEqual(result, expected, f"Failed for path: {path}")
         
     def test_extract_piece_type_from_sprites_path_pathlib(self):
-        """🧪 בדיקת חילוץ סוג כלי מנתיב pathlib.Path"""
+"""🧪 checking חילוץ סוג piece מנתיב pathlib.Path"""
         path = pathlib.Path("pieces/RW/states/move/sprites")
         result = extract_piece_type_from_sprites_path(path)
         self.assertEqual(result, "RW")
         
     def test_extract_piece_type_invalid_paths(self):
-        """🧪 בדיקת נתיבים לא תקינים - צריכים להחזיר None"""
+"""🧪 checking paths no תקינים - צריכים להחזיר None"""
         invalid_paths = [
             "invalid/path",
             "pieces/PW",
@@ -75,7 +75,7 @@ class TestHelperFunctions(unittest.TestCase):
                 self.assertIsNone(result, f"Path '{path}' should return None")
                 
     def test_construct_sprites_path_for_state_valid_paths(self):
-        """🧪 בדיקת בניית נתיב sprites לstate חדש"""
+"""🧪 checking בניית path sprites לstate new"""
         test_cases = [
             ("pieces/PW/states/idle/sprites", "move", "pieces/PW/states/move/sprites"),
             ("pieces/BB/states/jump/sprites", "idle", "pieces/BB/states/idle/sprites"),
@@ -89,7 +89,7 @@ class TestHelperFunctions(unittest.TestCase):
                 self.assertEqual(result, expected)
                 
     def test_construct_sprites_path_for_state_invalid_fallback(self):
-        """🧪 בדיקת fallback לנתיב לא תקין"""
+"""🧪 checking fallback לנתיב no valid"""
         invalid_path = "invalid/structure"
         target_state = "move"
         result = construct_sprites_path_for_state(invalid_path, target_state)
@@ -97,10 +97,10 @@ class TestHelperFunctions(unittest.TestCase):
 
 @unittest.skipUnless(HAS_IMPORTS, "Required imports not available")
 class TestStateInitialization(unittest.TestCase):
-    """🏗️ טסטים מקיפים לאתחול State"""
+"""🏗️ tests comprehensive לinitialize State"""
     
     def setUp(self):
-        """🔧 הכנת נתונים לכל טסט"""
+"""🔧 setup data for each test"""
         self.mock_moves = Mock(spec=Moves)
         
         self.mock_graphics = Mock(spec=Graphics)
@@ -120,10 +120,10 @@ class TestStateInitialization(unittest.TestCase):
         self.mock_physics.update = Mock(return_value=False)
         
     def test_initialization_default_state(self):
-        """🧪 אתחול עם state ברירת מחדל (idle)"""
+"""🧪 initialization with state ברירת מחדל (idle)"""
         state = State(self.mock_moves, self.mock_graphics, self.mock_physics)
         
-        # בדיקת כל המאפיינים
+# checking all המאפיינים
         self.assertEqual(state.moves, self.mock_moves)
         self.assertEqual(state.graphics, self.mock_graphics)
         self.assertEqual(state.physics, self.mock_physics)
@@ -135,7 +135,7 @@ class TestStateInitialization(unittest.TestCase):
         self.assertEqual(state.rest_duration_ms, 0)
         
     def test_initialization_custom_state(self):
-        """🧪 אתחול עם state מותאם אישית"""
+"""🧪 initialization with state מותאם אישית"""
         custom_states = ["move", "jump", "long_rest", "short_rest", "custom_state"]
         
         for state_name in custom_states:
@@ -147,10 +147,10 @@ class TestStateInitialization(unittest.TestCase):
                 self.assertEqual(state.physics, self.mock_physics)
                 
     def test_initialization_state_properties(self):
-        """🧪 בדיקת כל המאפיינים הפנימיים"""
+"""🧪 checking all המאפיינים הפנימיים"""
         state = State(self.mock_moves, self.mock_graphics, self.mock_physics, "test_state")
         
-        # בדיקת types
+# checking types
         self.assertIsInstance(state.transitions, dict)
         self.assertIsInstance(state.state_start_time, int)
         self.assertIsInstance(state.is_rest_state, bool)
@@ -159,10 +159,10 @@ class TestStateInitialization(unittest.TestCase):
 
 @unittest.skipUnless(HAS_IMPORTS, "Required imports not available")
 class TestStateCopy(unittest.TestCase):
-    """📋 טסטים מקיפים לfunctionality של copy"""
+"""📋 tests comprehensive לfunctionality of copy"""
     
     def setUp(self):
-        """🔧 הכנת נתונים לכל טסט"""
+"""🔧 setup data for each test"""
         self.mock_moves = Mock(spec=Moves)
         self.mock_graphics = Mock(spec=Graphics)
         self.mock_graphics.state_name = "idle"
@@ -174,67 +174,67 @@ class TestStateCopy(unittest.TestCase):
         self.state = State(self.mock_moves, self.mock_graphics, self.mock_physics, "test_state")
         
     def test_copy_basic_properties(self):
-        """🧪 בדיקת העתקת מאפיינים בסיסיים"""
-        # הגדרת מאפיינים מיוחדים
+"""🧪 checking copying מאפיינים basic"""
+# הגדרת מאפיינים מיוחדים
         self.state.is_rest_state = True
         self.state.rest_duration_ms = 1500
         
         copied_state = self.state.copy()
         
-        # בדיקת שכל המאפיינים הועתקו נכון
+# checking שכל המאפיינים הועתקו נכון
         self.assertEqual(copied_state.state, self.state.state)
         self.assertEqual(copied_state.is_rest_state, self.state.is_rest_state)
         self.assertEqual(copied_state.rest_duration_ms, self.state.rest_duration_ms)
         self.assertEqual(copied_state.moves, self.state.moves)  # Same reference
         
     def test_copy_calls_component_copy(self):
-        """🧪 בדיקת שhfunctions copy נקראות על הcomponents"""
+"""🧪 checking שhfunctions copy נקראות על הcomponents"""
         copied_state = self.state.copy()
         
-        # בדיקת שneed_copy נקראו
+# checking שneed_copy נקראו
         self.mock_graphics.copy.assert_called_once()
         self.mock_physics.copy.assert_called_once()
         
     def test_copy_resets_transitions(self):
-        """🧪 בדיקת שhransitions מתאפסים במחלקה מועתקת"""
-        # הוספת transitions למקור
+"""🧪 checking שhransitions מתאפסים במחלקה מועתקת"""
+# הוספת transitions למקור
         target_state = Mock()
         self.state.set_transition("test", target_state)
         
         copied_state = self.state.copy()
         
-        # Transitions צריכים להיות ריקים בהעתק
+# Transitions צריכים להיות empty בהעתק
         self.assertEqual(copied_state.transitions, {})
         
     def test_copy_graphics_state_name_fix(self):
-        """🧪 בדיקת שstate_name מתקן בgraphics המועתק"""
+"""🧪 checking שstate_name מתקן בgraphics המועתק"""
         copied_state = self.state.copy()
         
-        # בדיקת שstate_name הוגדר נכון
+# checking שstate_name הוגדר נכון
         self.assertEqual(copied_state.graphics.state_name, self.state.state)
         
     def test_copy_multiple_times(self):
-        """🧪 בדיקת העתקות מרובות"""
+"""🧪 checking העתקות מרובות"""
         copy1 = self.state.copy()
         copy2 = self.state.copy()
         copy3 = copy1.copy()
         
-        # כל העתק צריך להיות עצמאי
+# all העתק צריך להיות עצמאי
         self.assertNotEqual(copy1, copy2)
         self.assertNotEqual(copy1, copy3)
         self.assertNotEqual(copy2, copy3)
         
-        # אבל עם אותם מאפיינים
+# but with אותם מאפיינים
         for copy_state in [copy1, copy2, copy3]:
             self.assertEqual(copy_state.state, self.state.state)
             self.assertEqual(copy_state.is_rest_state, self.state.is_rest_state)
 
 @unittest.skipUnless(HAS_IMPORTS, "Required imports not available")
 class TestStateTransitions(unittest.TestCase):
-    """🔄 טסטים מקיפים לטrנzitionים בין states"""
+"""🔄 tests comprehensive לטrנzitionים בין states"""
     
     def setUp(self):
-        """🔧 הכנת נתונים לכל טסט"""
+"""🔧 setup data for each test"""
         self.mock_moves = Mock(spec=Moves)
         self.mock_graphics = Mock(spec=Graphics)
         self.mock_physics = Mock(spec=Physics)
@@ -242,7 +242,7 @@ class TestStateTransitions(unittest.TestCase):
         self.state = State(self.mock_moves, self.mock_graphics, self.mock_physics, "idle")
         
     def test_set_single_transition(self):
-        """🧪 הוספת transition יחיד"""
+"""🧪 הוספת transition יחיד"""
         target_state = State(self.mock_moves, self.mock_graphics, self.mock_physics, "move")
         
         self.state.set_transition("command", target_state)
@@ -251,7 +251,7 @@ class TestStateTransitions(unittest.TestCase):
         self.assertEqual(len(self.state.transitions), 1)
         
     def test_set_multiple_transitions(self):
-        """🧪 הוספת transitions מרובים"""
+"""🧪 הוספת transitions מרובים"""
         move_state = State(self.mock_moves, self.mock_graphics, self.mock_physics, "move")
         jump_state = State(self.mock_moves, self.mock_graphics, self.mock_physics, "jump")
         rest_state = State(self.mock_moves, self.mock_graphics, self.mock_physics, "rest")
@@ -267,27 +267,27 @@ class TestStateTransitions(unittest.TestCase):
         for event, target in transitions.items():
             self.state.set_transition(event, target)
             
-        # בדיקת שכל הhransitions נוספו
+# checking שכל הhransitions נוספו
         self.assertEqual(len(self.state.transitions), 5)
         for event, target in transitions.items():
             self.assertEqual(self.state.transitions[event], target)
             
     def test_overwrite_transition(self):
-        """🧪 דריסת transition קיים"""
+"""🧪 דריסת transition קיים"""
         state1 = State(self.mock_moves, self.mock_graphics, self.mock_physics, "state1")
         state2 = State(self.mock_moves, self.mock_graphics, self.mock_physics, "state2")
         
-        # הוספה ראשונה
+# הוספה first
         self.state.set_transition("event", state1)
         self.assertEqual(self.state.transitions["event"], state1)
         
-        # דריסה
+# דריסה
         self.state.set_transition("event", state2)
         self.assertEqual(self.state.transitions["event"], state2)
         self.assertEqual(len(self.state.transitions), 1)
         
     def test_transition_with_special_characters(self):
-        """🧪 transitions עם תווים מיוחדים"""
+"""🧪 transitions with תווים מיוחדים"""
         target_state = State(self.mock_moves, self.mock_graphics, self.mock_physics, "target")
         
         special_events = ["move-action", "jump_high", "rest.long", "complete!", "timeout?"]
@@ -299,10 +299,10 @@ class TestStateTransitions(unittest.TestCase):
 
 @unittest.skipUnless(HAS_IMPORTS, "Required imports not available")
 class TestStateReset(unittest.TestCase):
-    """🔄 טסטים מקיפים לfunctionality של reset"""
+"""🔄 tests comprehensive לfunctionality of reset"""
     
     def setUp(self):
-        """🔧 הכנת נתונים לכל טסט"""
+"""🔧 setup data for each test"""
         self.mock_moves = Mock(spec=Moves)
         self.mock_graphics = Mock(spec=Graphics)
         self.mock_graphics.reset = Mock()
@@ -312,22 +312,22 @@ class TestStateReset(unittest.TestCase):
         self.state = State(self.mock_moves, self.mock_graphics, self.mock_physics)
         
     def test_reset_with_valid_command(self):
-        """🧪 reset עם פקודה תקינה"""
+"""🧪 reset with command valid"""
         timestamp = int(time.time() * 1000)
         cmd = Command(timestamp, "test_piece", "move", [1, 1])
         
         self.state.reset(cmd)
         
-        # בדיקת שהstate עודכן
+# checking שהstate עודכן
         self.assertEqual(self.state.current_command, cmd)
         self.assertEqual(self.state.state_start_time, timestamp)
         
-        # בדיקת שהcomponents עודכנו
+# checking שהcomponents עודכנו
         self.mock_graphics.reset.assert_called_once_with(cmd)
         self.mock_physics.reset.assert_called_once_with(cmd)
         
     def test_reset_multiple_times(self):
-        """🧪 מספר resets ברצף"""
+"""🧪 number resets ברצף"""
         timestamps = [1000, 2000, 3000]
         commands = [
             Command(timestamps[0], "piece1", "move", [1, 1]),
@@ -342,12 +342,12 @@ class TestStateReset(unittest.TestCase):
                 self.assertEqual(self.state.current_command, cmd)
                 self.assertEqual(self.state.state_start_time, timestamps[i])
                 
-        # בדיקת שreset נקרא מספר פעמים
+# checking שreset נקרא number פעמים
         self.assertEqual(self.mock_graphics.reset.call_count, 3)
         self.assertEqual(self.mock_physics.reset.call_count, 3)
         
     def test_reset_with_different_command_types(self):
-        """🧪 reset עם סוגי פקודות שונים"""
+"""🧪 reset with different command types"""
         command_types = ["move", "jump", "attack", "defend", "special"]
         
         for cmd_type in command_types:
@@ -359,10 +359,10 @@ class TestStateReset(unittest.TestCase):
 
 @unittest.skipUnless(HAS_IMPORTS, "Required imports not available")
 class TestStateCanTransition(unittest.TestCase):
-    """⏰ טסטים מקיפים לlogic של can_transition"""
+"""⏰ tests comprehensive לlogic of can_transition"""
     
     def setUp(self):
-        """🔧 הכנת נתונים לכל טסט"""
+"""🔧 setup data for each test"""
         self.mock_moves = Mock(spec=Moves)
         self.mock_graphics = Mock(spec=Graphics)
         self.mock_physics = Mock(spec=Physics)
@@ -370,7 +370,7 @@ class TestStateCanTransition(unittest.TestCase):
         self.state = State(self.mock_moves, self.mock_graphics, self.mock_physics)
         
     def test_non_rest_state_always_can_transition(self):
-        """🧪 state לא-מנוחה תמיד יכול לעבור transition"""
+"""🧪 state לא-מנוחה תמיד יכול לעבור transition"""
         self.state.is_rest_state = False
         
         test_times = [0, 100, 1000, 5000, 10000]
@@ -380,12 +380,12 @@ class TestStateCanTransition(unittest.TestCase):
                 self.assertTrue(self.state.can_transition(now_ms))
                 
     def test_rest_state_before_duration(self):
-        """🧪 state מנוחה לפני השלמת הזמן"""
+"""🧪 state rest לפני השלמת הזמן"""
         self.state.is_rest_state = True
         self.state.rest_duration_ms = 2000
         self.state.state_start_time = 1000
         
-        # זמנים לפני השלמת המנוחה
+# זמנים לפני השלמת המנוחה
         early_times = [1000, 1500, 2500, 2999]
         
         for now_ms in early_times:
@@ -393,12 +393,12 @@ class TestStateCanTransition(unittest.TestCase):
                 self.assertFalse(self.state.can_transition(now_ms))
                 
     def test_rest_state_after_duration(self):
-        """🧪 state מנוחה אחרי השלמת הזמן"""
+"""🧪 state rest אחרי השלמת הזמן"""
         self.state.is_rest_state = True
         self.state.rest_duration_ms = 2000
         self.state.state_start_time = 1000
         
-        # זמנים אחרי השלמת המנוחה (1000 + 2000 = 3000)
+# זמנים אחרי השלמת המנוחה (1000 + 2000 = 3000)
         late_times = [3000, 3001, 4000, 5000]
         
         for now_ms in late_times:
@@ -406,21 +406,21 @@ class TestStateCanTransition(unittest.TestCase):
                 self.assertTrue(self.state.can_transition(now_ms))
                 
     def test_rest_state_edge_cases(self):
-        """🧪 מקרי קצה לstate מנוחה"""
+"""🧪 cases of קצה לstate rest"""
         self.state.is_rest_state = True
         
-        # מקרה 1: אורך מנוחה 0
+# case 1: אורך rest 0
         self.state.rest_duration_ms = 0
         self.state.state_start_time = 1000
         self.assertTrue(self.state.can_transition(1000))
         
-        # מקרה 2: זמן התחלה גבוה מהזמן הנוכחי (שגיאת timing)
+# case 2: זמן start גבוה מהזמן הנוכחי (שגיאת timing)
         self.state.rest_duration_ms = 1000
         self.state.state_start_time = 2000
         self.assertFalse(self.state.can_transition(1500))
         
     def test_rest_state_various_durations(self):
-        """🧪 state מנוחה עם משכי זמן שונים"""
+"""🧪 state rest with משכי זמן different"""
         durations = [100, 500, 1000, 2000, 5000]
         start_time = 1000
         
@@ -430,29 +430,29 @@ class TestStateCanTransition(unittest.TestCase):
                 self.state.rest_duration_ms = duration
                 self.state.state_start_time = start_time
                 
-                # לפני סיום
+# לפני סיום
                 self.assertFalse(self.state.can_transition(start_time + duration - 1))
-                # בסיום בדיוק
+# בסיום exactly
                 self.assertTrue(self.state.can_transition(start_time + duration))
-                # אחרי סיום
+# אחרי סיום
                 self.assertTrue(self.state.can_transition(start_time + duration + 100))
 
 @unittest.skipUnless(HAS_IMPORTS, "Required imports not available")
 class TestCreateTransitionState(unittest.TestCase):
-    """🎭 טסטים מקיפים ליצירת transition states"""
+"""🎭 tests comprehensive ליצירת transition states"""
     
     def setUp(self):
-        """🔧 הכנת נתונים לכל טסט"""
+"""🔧 setup data for each test"""
         self.mock_moves = Mock(spec=Moves)
         
-        # Mock graphics עם כל המאפיינים הנדרשים
+# Mock graphics with all המאפיינים הנדרשים
         self.mock_graphics = Mock(spec=Graphics)
         self.mock_graphics.sprites_folder = "pieces/PW/states/idle/sprites"
         self.mock_graphics.cell_size = 64
         self.mock_graphics.state_name = "idle"
         self.mock_graphics.copy.return_value = self.mock_graphics
         
-        # Mock physics עם מאפיינים נדרשים
+# Mock physics with מאפיינים נדרשים
         self.mock_physics = Mock(spec=Physics)
         self.mock_physics.current_cell = (0, 0)
         self.mock_physics.target_cell = (1, 1)
@@ -462,8 +462,8 @@ class TestCreateTransitionState(unittest.TestCase):
         
     @patch('It1_interfaces.State.GraphicsFactory')
     def test_create_transition_state_basic(self, mock_graphics_factory):
-        """🧪 יצירת transition state בסיסי"""
-        # הגדרת template state
+"""🧪 creating transition state basic"""
+# הגדרת template state
         template_graphics = Mock()
         template_graphics.sprites_folder = "pieces/PW/states/move/sprites"
         template_graphics.cell_size = 64
@@ -473,28 +473,28 @@ class TestCreateTransitionState(unittest.TestCase):
         template_state.is_rest_state = True
         template_state.rest_duration_ms = 1000
         
-        # הגדרת mock factory
+# הגדרת mock factory
         new_graphics = Mock()
         mock_graphics_factory.create.return_value = new_graphics
         
-        # יצירת command
+# creating command
         cmd = Command(1000, "test", "move", [])
         
-        # יצירת transition state
+# creating transition state
         new_state = self.state._create_transition_state(template_state, cmd)
         
-        # בדיקת המאפיינים החדשים
+# checking המאפיינים החדשים
         self.assertEqual(new_state.state, "move")
         self.assertEqual(new_state.is_rest_state, True)
         self.assertEqual(new_state.rest_duration_ms, 1000)
         
-        # בדיקת שGraphicsFactory נקרא
+# checking שGraphicsFactory נקרא
         mock_graphics_factory.create.assert_called_once()
         
     @patch('It1_interfaces.State.GraphicsFactory')
     def test_create_transition_state_with_transitions(self, mock_graphics_factory):
-        """🧪 יצירת transition state עם transitions"""
-        # יצירת template עם transitions
+"""🧪 creating transition state with transitions"""
+# creating template with transitions
         template_state = State(self.mock_moves, self.mock_graphics, self.mock_physics, "move")
         idle_state = State(self.mock_moves, self.mock_graphics, self.mock_physics, "idle")
         template_state.transitions = {"complete": idle_state, "timeout": idle_state}
@@ -504,13 +504,13 @@ class TestCreateTransitionState(unittest.TestCase):
         
         new_state = self.state._create_transition_state(template_state, cmd)
         
-        # בדיקת שhransitions הועתקו
+# checking שhransitions הועתקו
         self.assertEqual(new_state.transitions, template_state.transitions)
         
     @patch('It1_interfaces.State.GraphicsFactory')
     def test_create_transition_state_physics_copy(self, mock_graphics_factory):
-        """🧪 בדיקת העתקת מצב physics"""
-        # הגדרת מצב physics נוכחי
+"""🧪 checking copying state physics"""
+# הגדרת state physics נוכחי
         self.state.physics.current_cell = (2, 3)
         self.state.physics.target_cell = (4, 5)
         
@@ -520,13 +520,13 @@ class TestCreateTransitionState(unittest.TestCase):
         
         new_state = self.state._create_transition_state(template_state, cmd)
         
-        # בדיקת שמצב physics הועתק
+# checking שמצב physics הועתק
         self.assertEqual(new_state.physics.current_cell, (2, 3))
         self.assertEqual(new_state.physics.target_cell, (4, 5))
         
     @patch('It1_interfaces.State.GraphicsFactory')
     def test_create_transition_state_graphics_path_construction(self, mock_graphics_factory):
-        """🧪 בדיקת בניית נתיב sprites נכון"""
+"""🧪 checking בניית path sprites נכון"""
         template_graphics = Mock()
         template_graphics.sprites_folder = "pieces/BB/states/jump/sprites"
         template_graphics.cell_size = 32
@@ -538,13 +538,13 @@ class TestCreateTransitionState(unittest.TestCase):
         
         self.state._create_transition_state(template_state, cmd)
         
-        # בדיקת הarguments שנשלחו לfactory
+# checking הarguments שנשלחו לfactory
         call_args = mock_graphics_factory.create.call_args
         self.assertIsNotNone(call_args)
         
-        # בדיקת שstate name נשלח נכון
+# checking שstate name נשלח נכון
         self.assertEqual(call_args[0][3], "jump")  # state name argument
 
 if __name__ == '__main__':
-    # הרצת כל הטסטים עם reporting מפורט
+# running all הטסטים with reporting מפורט
     unittest.main(verbosity=2)

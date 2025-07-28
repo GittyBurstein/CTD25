@@ -17,10 +17,10 @@ from Moves import Moves
 
 
 class TestMovesInitialization(unittest.TestCase):
-    """🏗️ טסטים לאתחול מחלקת Moves"""
+"""🏗️ tests לאתחול מחלקת Moves"""
     
     def setUp(self):
-        """🔧 הכנת נתונים לכל טסט"""
+"""🔧 setup data for each test"""
         self.test_moves_content = """# Test moves file
 1,0
 -1,0
@@ -31,48 +31,48 @@ class TestMovesInitialization(unittest.TestCase):
 """
         
     def test_initialization_with_file_path_string(self):
-        """🧪 אתחול עם נתיב קובץ כstring"""
+"""🧪 initialization with path file כstring"""
         with patch('builtins.open', mock_open(read_data=self.test_moves_content)):
             with patch('pathlib.Path.exists', return_value=True):
                 moves = Moves(pathlib.Path("test_moves.txt"), (8, 8))
                 
-                # בדיקת שהנתיב נשמר נכון
+# checking שהנתיב נשמר נכון
                 self.assertEqual(moves.move_deltas, [(1, 0), (-1, 0), (0, 1), (0, -1), (2, 2), (-2, -2)])
                 self.assertEqual(moves.board_height, 8)
                 self.assertEqual(moves.board_width, 8)
             
     def test_initialization_with_pathlib_path(self):
-        """🧪 אתחול עם pathlib.Path"""
+"""🧪 initialization with pathlib.Path"""
         path = pathlib.Path("test_moves.txt")
         
         with patch('builtins.open', mock_open(read_data=self.test_moves_content)):
             moves = Moves(path)
             
-            # בדיקת שהנתיב נשמר נכון
+# checking שהנתיב נשמר נכון
             self.assertEqual(moves.moves_file_path, path)
             
-            # בדיקת שהtoves נטענו נכון
+# checking שהtoves נטענו נכון
             expected_moves = [(1, 0), (-1, 0), (0, 1), (0, -1), (2, 2), (-2, -2)]
             self.assertEqual(moves.moves, expected_moves)
             
     @patch('builtins.open', side_effect=FileNotFoundError("File not found"))
     def test_initialization_file_not_found(self, mock_file):
-        """🧪 אתחול עם קובץ שלא קיים"""
+"""🧪 initialization with file שלא קיים"""
         with self.assertRaises(FileNotFoundError):
             Moves("non_existent_file.txt")
             
     @patch('builtins.open', side_effect=PermissionError("Permission denied"))
     def test_initialization_permission_error(self, mock_file):
-        """🧪 אתחול עם קובץ ללא הרשאות"""
+"""🧪 initialization with file ללא הרשאות"""
         with self.assertRaises(PermissionError):
             Moves("no_permission_file.txt")
 
 
 class TestMovesFileParsing(unittest.TestCase):
-    """📄 טסטים לניתוח קבצי תנועות"""
+"""📄 tests לparsing movement files"""
     
     def test_parse_basic_moves(self):
-        """🧪 ניתוח תנועות בסיסיות"""
+"""🧪 ניתוח movements בסיסיות"""
         content = """1,0
 -1,0
 0,1
@@ -85,7 +85,7 @@ class TestMovesFileParsing(unittest.TestCase):
             self.assertEqual(moves.moves, expected)
             
     def test_parse_with_comments(self):
-        """🧪 ניתוח עם שורות הערות"""
+"""🧪 ניתוח with lines הערות"""
         content = """# This is a comment
 1,0
 # Another comment
@@ -101,7 +101,7 @@ class TestMovesFileParsing(unittest.TestCase):
             self.assertEqual(moves.moves, expected)
             
     def test_parse_with_empty_lines(self):
-        """🧪 ניתוח עם שורות ריקות"""
+"""🧪 parsing with empty lines"""
         content = """1,0
 
 -1,0
@@ -119,7 +119,7 @@ class TestMovesFileParsing(unittest.TestCase):
             self.assertEqual(moves.moves, expected)
             
     def test_parse_with_whitespace(self):
-        """🧪 ניתוח עם רווחים לבנים"""
+"""🧪 ניתוח with רווחים white"""
         content = """  1,0  
  -1 , 0 
 0, 1  
@@ -132,7 +132,7 @@ class TestMovesFileParsing(unittest.TestCase):
             self.assertEqual(moves.moves, expected)
             
     def test_parse_large_numbers(self):
-        """🧪 ניתוח עם מספרים גדולים"""
+"""🧪 ניתוח with numbers גדולים"""
         content = """10,15
 -20,-25
 100,0
@@ -145,7 +145,7 @@ class TestMovesFileParsing(unittest.TestCase):
             self.assertEqual(moves.moves, expected)
             
     def test_parse_edge_case_zeros(self):
-        """🧪 ניתוח עם אפסים"""
+"""🧪 ניתוח with אפסים"""
         content = """0,0
 0,1
 1,0
@@ -159,10 +159,10 @@ class TestMovesFileParsing(unittest.TestCase):
 
 
 class TestMovesErrorHandling(unittest.TestCase):
-    """⚠️ טסטים לטיפול בשגיאות"""
+"""⚠️ tests לטיפול בשגיאות"""
     
     def test_invalid_format_missing_comma(self):
-        """🧪 פורמט לא תקין - חסרה פסיק"""
+"""🧪 פורמט no valid - חסרה פסיק"""
         content = """1 0
 2,1"""
         
@@ -171,7 +171,7 @@ class TestMovesErrorHandling(unittest.TestCase):
                 Moves("test.txt")
                 
     def test_invalid_format_too_many_values(self):
-        """🧪 פורמט לא תקין - יותר מדי ערכים"""
+"""🧪 פורמט no valid - more מדי ערכים"""
         content = """1,0,5
 2,1"""
         
@@ -180,7 +180,7 @@ class TestMovesErrorHandling(unittest.TestCase):
                 Moves("test.txt")
                 
     def test_invalid_format_too_few_values(self):
-        """🧪 פורמט לא תקין - מעט מדי ערכים"""
+"""🧪 פורמט no valid - few מדי ערכים"""
         content = """1
 2,1"""
         
@@ -189,7 +189,7 @@ class TestMovesErrorHandling(unittest.TestCase):
                 Moves("test.txt")
                 
     def test_invalid_format_non_numeric(self):
-        """🧪 פורמט לא תקין - ערכים לא מספריים"""
+"""🧪 פורמט no valid - ערכים no מספריים"""
         content = """a,b
 2,1"""
         
@@ -198,7 +198,7 @@ class TestMovesErrorHandling(unittest.TestCase):
                 Moves("test.txt")
                 
     def test_invalid_format_mixed_valid_invalid(self):
-        """🧪 פורמט מעורב - חלק תקין חלק לא"""
+"""🧪 פורמט מעורב - part valid part no"""
         content = """1,0
 invalid_line
 2,1"""
@@ -208,7 +208,7 @@ invalid_line
                 Moves("test.txt")
                 
     def test_empty_file(self):
-        """🧪 קובץ ריק"""
+"""🧪 file empty"""
         content = ""
         
         with patch('builtins.open', mock_open(read_data=content)):
@@ -216,7 +216,7 @@ invalid_line
             self.assertEqual(moves.moves, [])
             
     def test_only_comments_and_empty_lines(self):
-        """🧪 רק הערות ושורות ריקות"""
+"""🧪 only הערות ושורות ריקות"""
         content = """# Only comments
 
 # And empty lines
@@ -229,10 +229,10 @@ invalid_line
 
 
 class TestMovesDataAccess(unittest.TestCase):
-    """📊 טסטים לגישה לנתונים"""
+"""📊 tests לגישה לנתונים"""
     
     def setUp(self):
-        """🔧 הכנת נתונים לכל טסט"""
+"""🔧 setup data for each test"""
         self.moves_content = """1,0
 -1,0
 0,1
@@ -244,37 +244,37 @@ class TestMovesDataAccess(unittest.TestCase):
             self.moves = Moves("test.txt")
             
     def test_get_moves_list(self):
-        """🧪 קבלת רשימת התנועות"""
+"""🧪 getting רשימת התנועות"""
         expected = [(1, 0), (-1, 0), (0, 1), (0, -1), (2, 2), (-2, -2)]
         self.assertEqual(self.moves.moves, expected)
         
     def test_moves_list_immutability(self):
-        """🧪 בדיקת שרשימת התנועות לא ניתנת לשינוי מבחוץ"""
+"""🧪 checking שרשימת התנועות no ניתנת לשינוי מבחוץ"""
         original_moves = self.moves.moves.copy()
         
-        # נסיון לשנות את הרשימה
+# נסיון לשנות the הרשימה
         self.moves.moves.append((5, 5))
         
-        # הרשימה צריכה להשתנות (Python lists are mutable)
-        # זה מראה שצריך להוסיף property או copy אם רוצים immutability
+# הרשימה צריכה להשתנות (Python lists are mutable)
+# זה מראה שצריך להוסיף property or copy if רוצים immutability
         self.assertNotEqual(self.moves.moves, original_moves)
         
     def test_file_path_access(self):
-        """🧪 גישה לנתיב הקובץ"""
+"""🧪 גישה לנתיב הקובץ"""
         self.assertEqual(self.moves.moves_file_path, "test.txt")
         
     def test_moves_count(self):
-        """🧪 ספירת מספר התנועות"""
+"""🧪 ספירת number התנועות"""
         self.assertEqual(len(self.moves.moves), 6)
 
 
 class TestMovesRealWorldScenarios(unittest.TestCase):
-    """🌍 טסטים למקרי שימוש אמיתיים"""
+"""🌍 tests למקרי שימוש אמיתיים"""
     
     def test_chess_pawn_moves(self):
-        """🧪 תנועות חייל שחמט"""
+"""🧪 movements חייל chess"""
         pawn_content = """1,0
-2,0"""  # פ Forward 1 or 2
+2,0""" # פ Forward 1 or 2
         
         with patch('builtins.open', mock_open(read_data=pawn_content)):
             moves = Moves("pawn_moves.txt")
@@ -283,7 +283,7 @@ class TestMovesRealWorldScenarios(unittest.TestCase):
             self.assertEqual(moves.moves, expected)
             
     def test_chess_knight_moves(self):
-        """🧪 תנועות סוס שחמט"""
+"""🧪 movements knight chess"""
         knight_content = """2,1
 2,-1
 -2,1
@@ -303,7 +303,7 @@ class TestMovesRealWorldScenarios(unittest.TestCase):
             self.assertEqual(moves.moves, expected)
             
     def test_chess_king_moves(self):
-        """🧪 תנועות מלך שחמט"""
+"""🧪 movements king chess"""
         king_content = """1,0
 -1,0
 0,1
@@ -323,7 +323,7 @@ class TestMovesRealWorldScenarios(unittest.TestCase):
             self.assertEqual(moves.moves, expected)
             
     def test_custom_piece_moves(self):
-        """🧪 תנועות כלי מותאם אישית"""
+"""🧪 movements piece מותאם אישית"""
         custom_content = """3,0
 -3,0
 0,3
@@ -344,10 +344,10 @@ class TestMovesRealWorldScenarios(unittest.TestCase):
 
 
 class TestMovesFileIO(unittest.TestCase):
-    """💾 טסטים לפעולות קובץ"""
+"""💾 tests לפעולות file"""
     
     def test_with_actual_temp_file(self):
-        """🧪 בדיקה עם קובץ זמני אמיתי"""
+"""🧪 check with file זמני אמיתי"""
         moves_content = """# Temporary test file
 1,0
 -1,0
@@ -359,19 +359,19 @@ class TestMovesFileIO(unittest.TestCase):
             temp_file_path = temp_file.name
             
         try:
-            # טען מהקובץ הזמני
+# טען מהקובץ הזמני
             moves = Moves(temp_file_path)
             
             expected = [(1, 0), (-1, 0), (0, 1), (0, -1)]
             self.assertEqual(moves.moves, expected)
             
         finally:
-            # נקה את הקובץ הזמני
+# נקה the הקובץ הזמני
             os.unlink(temp_file_path)
             
     def test_unicode_handling(self):
-        """🧪 טיפול בתווי Unicode בהערות"""
-        unicode_content = """# תנועות בעברית
+"""🧪 טיפול בתווי Unicode בהערות"""
+unicode_content = """# movements בעברית
 1,0  # קדימה
 -1,0 # אחורה
 0,1  # ימינה
@@ -385,11 +385,11 @@ class TestMovesFileIO(unittest.TestCase):
 
 
 class TestMovesEdgeCases(unittest.TestCase):
-    """🎯 טסטים למקרי קצה"""
+"""🎯 tests למקרי קצה"""
     
     def test_very_large_file(self):
-        """🧪 קובץ גדול מאוד"""
-        # יצירת קובץ עם 1000 תנועות
+"""🧪 file גדול very"""
+# creating file with 1000 movements
         large_content = ""
         for i in range(1000):
             large_content += f"{i % 10},{(i * 2) % 10}\n"
@@ -397,16 +397,16 @@ class TestMovesEdgeCases(unittest.TestCase):
         with patch('builtins.open', mock_open(read_data=large_content)):
             moves = Moves("large_file.txt")
             
-            # בדיקת שכל התנועות נטענו
+# checking שכל התנועות נטענו
             self.assertEqual(len(moves.moves), 1000)
             
-            # בדיקת כמה דוגמאות
+# checking several דוגמאות
             self.assertEqual(moves.moves[0], (0, 0))
             self.assertEqual(moves.moves[1], (1, 2))
             self.assertEqual(moves.moves[10], (0, 0))  # 10 % 10 = 0, (10*2) % 10 = 0
             
     def test_file_with_only_one_move(self):
-        """🧪 קובץ עם תנועה אחת בלבד"""
+"""🧪 file with movement one בלבד"""
         content = "5,3"
         
         with patch('builtins.open', mock_open(read_data=content)):
@@ -416,7 +416,7 @@ class TestMovesEdgeCases(unittest.TestCase):
             self.assertEqual(len(moves.moves), 1)
             
     def test_duplicate_moves(self):
-        """🧪 תנועות כפולות"""
+"""🧪 movements כפולות"""
         content = """1,0
 1,0
 2,1
@@ -426,12 +426,12 @@ class TestMovesEdgeCases(unittest.TestCase):
         with patch('builtins.open', mock_open(read_data=content)):
             moves = Moves("duplicate_moves.txt")
             
-            # הkwarts לא מסנן כפילויות - זה נשמר כמו שהוא
+# הkwarts no מסנן כפילויות - זה נשמר כמו שהוא
             expected = [(1, 0), (1, 0), (2, 1), (1, 0), (2, 1)]
             self.assertEqual(moves.moves, expected)
 
 
 if __name__ == '__main__':
-    print("🧪 מריץ טסטים מקיפים למחלקת Moves...")
+print("🧪 running tests comprehensive for class Moves...")
     print("=" * 60)
     unittest.main(verbosity=2)

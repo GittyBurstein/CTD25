@@ -13,17 +13,17 @@ from Command import Command
 
 
 class TestCommand(unittest.TestCase):
-    """טסטים מקיפים למחלקת Command"""
+"""tests comprehensive for class Command"""
     
     def setUp(self):
-        """הכנת נתונים לכל טסט"""
+"""setup data for each test"""
         self.timestamp = 1000
         self.piece_id = "NW71"
         self.from_cell = (0, 1)
         self.to_cell = (2, 2)
     
     def test_command_creation(self):
-        """🧪 טסט יצירת פקודה בסיסית"""
+"""🧪 test create basic command"""
         cmd = Command(
             timestamp=self.timestamp,
             piece_id=self.piece_id,
@@ -37,7 +37,7 @@ class TestCommand(unittest.TestCase):
         self.assertEqual(cmd.params, [self.from_cell, self.to_cell])
     
     def test_post_init_params_validation(self):
-        """🧪 טסט תיקון params שאינם רשימה"""
+"""🧪 test fix params that are not list"""
         # Create command with non-list params
         cmd = Command(
             timestamp=self.timestamp,
@@ -50,7 +50,7 @@ class TestCommand(unittest.TestCase):
         self.assertEqual(cmd.params, [])
     
     def test_create_move_command(self):
-        """🧪 טסט factory method לפקודת תנועה"""
+"""🧪 test factory method for movement command"""
         cmd = Command.create_move_command(
             timestamp=self.timestamp,
             piece_id=self.piece_id,
@@ -64,7 +64,7 @@ class TestCommand(unittest.TestCase):
         self.assertEqual(cmd.params, [self.from_cell, self.to_cell])
     
     def test_create_jump_command(self):
-        """🧪 טסט factory method לפקודת קפיצה"""
+"""🧪 test factory method for jump command"""
         cmd = Command.create_jump_command(
             timestamp=self.timestamp,
             piece_id=self.piece_id,
@@ -78,7 +78,7 @@ class TestCommand(unittest.TestCase):
         self.assertEqual(cmd.params, [self.from_cell, self.to_cell])
     
     def test_create_idle_command(self):
-        """🧪 טסט factory method לפקודת המתנה"""
+"""🧪 test factory method for wait command"""
         cmd = Command.create_idle_command(
             timestamp=self.timestamp,
             piece_id=self.piece_id
@@ -90,7 +90,7 @@ class TestCommand(unittest.TestCase):
         self.assertEqual(cmd.params, [])
     
     def test_get_source_cell(self):
-        """🧪 טסט קבלת תא המקור"""
+"""🧪 test get source cell"""
         # Test valid source cell
         cmd = Command.create_move_command(
             self.timestamp, self.piece_id, self.from_cell, self.to_cell
@@ -106,7 +106,7 @@ class TestCommand(unittest.TestCase):
         self.assertIsNone(invalid_cmd.get_source_cell())
     
     def test_get_target_cell(self):
-        """🧪 טסט קבלת תא היעד"""
+"""🧪 test get target cell"""
         # Test valid target cell
         cmd = Command.create_move_command(
             self.timestamp, self.piece_id, self.from_cell, self.to_cell
@@ -122,7 +122,7 @@ class TestCommand(unittest.TestCase):
         self.assertIsNone(empty_cmd.get_target_cell())
     
     def test_str_representation(self):
-        """🧪 טסט ייצוג מחרוזת של הפקודה"""
+"""🧪 test string representation of command"""
         cmd = Command.create_move_command(
             self.timestamp, self.piece_id, self.from_cell, self.to_cell
         )
@@ -131,7 +131,7 @@ class TestCommand(unittest.TestCase):
         self.assertEqual(str(cmd), expected)
     
     def test_command_types(self):
-        """🧪 טסט סוגי פקודות שונים"""
+"""🧪 test different command types"""
         test_cases = [
             ("Move", [self.from_cell, self.to_cell]),
             ("Jump", [self.from_cell, self.to_cell]),
@@ -147,7 +147,7 @@ class TestCommand(unittest.TestCase):
                 self.assertEqual(cmd.params, params)
     
     def test_edge_cases(self):
-        """🧪 טסט מקרי קיצון"""
+"""🧪 test edge cases"""
         # Test with zero timestamp
         cmd = Command(0, self.piece_id, "Move", [])
         self.assertEqual(cmd.timestamp, 0)
@@ -167,5 +167,5 @@ class TestCommand(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    print("🧪 הרצת טסטים למחלקת Command...")
+print("🧪 Running tests for class Command...")
     unittest.main(verbosity=2)

@@ -11,10 +11,11 @@ def main():
     from It1_interfaces.img import Img
     from It1_interfaces.EventBus import EventBus
     from It1_interfaces.ScoreManager import ScoreManager
-    from It1_interfaces.MoveLogger import MoveLogger
     from It1_interfaces.SoundManager import SoundManager
     from It1_interfaces.AnimationManager import AnimationManager
     import pathlib
+
+    from It1_interfaces.MoveLogger_short import MoveLogger
 
     # Initialize EventBus and managers
     event_bus = EventBus()

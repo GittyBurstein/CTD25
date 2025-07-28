@@ -20,7 +20,7 @@ try:
     import It1_interfaces
     from It1_interfaces.Physics import Physics
     from It1_interfaces.Command import Command
-    print("✅ Physics ו-Command יובאו בהצלחה מpackage!")
+print("✅ Physics ו-Command יובאו successfully מpackage!")
     IMPORTS_OK = True
 except ImportError as e:
     print(f"❌ Package import failed: {e}")
@@ -28,7 +28,7 @@ except ImportError as e:
         # Fallback - try direct import (won't work with relative imports)
         from Physics import Physics
         from Command import Command  
-        print("✅ Direct import עבד!")
+print("✅ Direct import עבד!")
         IMPORTS_OK = True
     except ImportError as e2:
         print(f"❌ Direct import also failed: {e2}")
@@ -36,20 +36,20 @@ except ImportError as e:
 
 
 class TestPhysics(unittest.TestCase):
-    """טסטים עבודיים למחלקת Physics"""
+"""tests עבודיים for class Physics"""
     
     def test_initialization_works(self):
-        """🧪 טסט שהאתחול עובד"""
+"""🧪 test שהאתחול עובד"""
         if not IMPORTS_OK:
             self.skipTest("Required modules not available")
             
         physics = Physics((2, 3), speed_cells_per_sec=2.0)
         self.assertEqual(physics.current_cell, (2, 3))
         self.assertEqual(physics.speed_cells_per_sec, 2.0)
-        print("✅ Physics אותחל בהצלחה!")
+print("✅ Physics אותחל successfully!")
     
     def test_get_pos_works(self):
-        """🧪 טסט שget_pos עובד"""
+"""🧪 test שget_pos עובד"""
         if not IMPORTS_OK:
             self.skipTest("Required modules not available")
             
@@ -58,19 +58,19 @@ class TestPhysics(unittest.TestCase):
         
         pos = physics.get_pos(1000)
         self.assertEqual(pos, (2, 3))
-        print("✅ get_pos עובד בהצלחה!")
+print("✅ get_pos עובד successfully!")
     
     def test_command_integration(self):
-        """🧪 טסט אינטגרציה עם Command"""
+"""🧪 test אינטגרציה with Command"""
         if not IMPORTS_OK:
             self.skipTest("Required modules not available")
             
         # Create a simple command
         cmd = Command.create_move_command(1000, "test", (0, 0), (1, 1))
         self.assertIsNotNone(cmd)
-        print("✅ Command נוצר בהצלחה!")
+print("✅ Command נוצר successfully!")
 
 
 if __name__ == '__main__':
-    print("🧪 מריץ טסטים עבודיים ל-Physics...")
+print("🧪 running tests עבודיים ל-Physics...")
     unittest.main(verbosity=2)

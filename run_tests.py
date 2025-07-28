@@ -2,10 +2,10 @@ import sys
 import os
 import unittest
 
-# מוסיפים את תיקיית השורש ל-PYTHONPATH
+# מוסיפים the תיקיית השורש ל-PYTHONPATH
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
-# מחפשים ומריצים את כל הטסטים בתיקיית tests
+# מחפשים ומריצים the all הטסטים בתיקיית tests
 loader = unittest.TestLoader()
 suite = loader.discover('tests')
 

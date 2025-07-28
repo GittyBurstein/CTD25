@@ -127,7 +127,7 @@ class ThreadedInputManager(threading.Thread):
         elif direction == 'right' and pos[1] < self.board.W_cells - 1:
             pos[1] += 1
             
-        # Only print when cursor actually moves (less noise)
+            # Only print when cursor actually moves (less noise)
         if old_pos != pos and self.debug:
             print(f"🎮 Player {player}: {old_pos} → {pos}")
 
@@ -157,8 +157,11 @@ class ThreadedInputManager(threading.Thread):
             start_pos = tuple(selected.current_state.physics.current_cell)
             
             if start_pos == pos:
-                if self.debug:
-                    print(f"⚠️ Same position - deselecting {selected.piece_id}")
+                # Same position - make the piece JUMP instead of deselecting!
+                now = self._game_time_func()
+                cmd = Command.create_jump_command(now, selected.piece_id, pos, pos)
+                self.user_input_queue.put(cmd)
+                print(f"🦘 Player {player}: {selected.piece_id} jumps at {pos}")
                 self.selection[player]['selected'] = None
                 return
                 

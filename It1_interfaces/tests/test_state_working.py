@@ -14,24 +14,24 @@ import time
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 try:
-    # נסה לייבא את הmodules
+# נסה לייבא the הmodules
     import State
     import Command
     import Moves
     import Graphics  
     import Physics
     HAS_IMPORTS = True
-    print("✅ כל הimports הצליחו!")
+print("✅ all הimports הצליחו!")
 except ImportError as e:
     print(f"⚠️ Import error: {e}")
     HAS_IMPORTS = False
 
 @unittest.skipUnless(HAS_IMPORTS, "Required imports not available")
 class TestStateHelperFunctions(unittest.TestCase):
-    """🔧 טסטים לפונקציות עזר של State module"""
+"""🔧 tests לפונקציות עזר of State module"""
     
     def test_extract_piece_type_from_sprites_path_string(self):
-        """🧪 בדיקת חילוץ סוג כלי מנתיב string"""
+"""🧪 checking חילוץ סוג piece מנתיב string"""
         test_cases = [
             ("pieces/PW/states/idle/sprites", "PW"),
             ("pieces/BB/states/move/sprites", "BB"),
@@ -46,13 +46,13 @@ class TestStateHelperFunctions(unittest.TestCase):
                 self.assertEqual(result, expected, f"Failed for path: {path}")
         
     def test_extract_piece_type_from_sprites_path_pathlib(self):
-        """🧪 בדיקת חילוץ סוג כלי מנתיב pathlib.Path"""
+"""🧪 checking חילוץ סוג piece מנתיב pathlib.Path"""
         path = pathlib.Path("pieces/RW/states/move/sprites")
         result = State.extract_piece_type_from_sprites_path(path)
         self.assertEqual(result, "RW")
         
     def test_extract_piece_type_invalid_paths(self):
-        """🧪 בדיקת נתיבים לא תקינים - צריכים להחזיר None"""
+"""🧪 checking paths no תקינים - צריכים להחזיר None"""
         invalid_paths = [
             "invalid/path",
             "pieces/PW",
@@ -70,7 +70,7 @@ class TestStateHelperFunctions(unittest.TestCase):
                 self.assertIsNone(result, f"Path '{path}' should return None")
                 
     def test_construct_sprites_path_for_state_valid_paths(self):
-        """🧪 בדיקת בניית נתיב sprites לstate חדש"""
+"""🧪 checking בניית path sprites לstate new"""
         test_cases = [
             ("pieces/PW/states/idle/sprites", "move", "pieces/PW/states/move/sprites"),
             ("pieces/BB/states/jump/sprites", "idle", "pieces/BB/states/idle/sprites"),
@@ -84,7 +84,7 @@ class TestStateHelperFunctions(unittest.TestCase):
                 self.assertEqual(result, expected)
                 
     def test_construct_sprites_path_for_state_invalid_fallback(self):
-        """🧪 בדיקת fallback לנתיב לא תקין"""
+"""🧪 checking fallback לנתיב no valid"""
         invalid_path = "invalid/structure"
         target_state = "move"
         result = State.construct_sprites_path_for_state(invalid_path, target_state)
@@ -92,10 +92,10 @@ class TestStateHelperFunctions(unittest.TestCase):
 
 @unittest.skipUnless(HAS_IMPORTS, "Required imports not available")
 class TestStateBasics(unittest.TestCase):
-    """🏗️ טסטים בסיסיים למחלקת State"""
+"""🏗️ tests basic for class State"""
     
     def setUp(self):
-        """🔧 הכנת נתונים לכל טסט"""
+"""🔧 setup data for each test"""
         self.mock_moves = Mock(spec=Moves.Moves if hasattr(Moves, 'Moves') else object)
         
         self.mock_graphics = Mock(spec=Graphics.Graphics if hasattr(Graphics, 'Graphics') else object)
@@ -115,7 +115,7 @@ class TestStateBasics(unittest.TestCase):
         self.mock_physics.update = Mock(return_value=False)
         
     def test_state_initialization_default(self):
-        """🧪 אתחול state עם ברירת מחדל"""
+"""🧪 initialization state with ברירת מחדל"""
         state = State.State(self.mock_moves, self.mock_graphics, self.mock_physics)
         
         self.assertEqual(state.moves, self.mock_moves)
@@ -129,7 +129,7 @@ class TestStateBasics(unittest.TestCase):
         self.assertEqual(state.rest_duration_ms, 0)
         
     def test_state_initialization_custom(self):
-        """🧪 אתחול state עם שם מותאם אישית"""
+"""🧪 initialization state with שם מותאם אישית"""
         custom_states = ["move", "jump", "long_rest", "short_rest", "custom_state"]
         
         for state_name in custom_states:
@@ -141,47 +141,47 @@ class TestStateBasics(unittest.TestCase):
                 self.assertEqual(state.physics, self.mock_physics)
                 
     def test_state_copy(self):
-        """🧪 בדיקת העתקת state"""
+"""🧪 checking copying state"""
         state = State.State(self.mock_moves, self.mock_graphics, self.mock_physics, "test_state")
         
-        # הגדרת מאפיינים מיוחדים
+# הגדרת מאפיינים מיוחדים
         state.is_rest_state = True
         state.rest_duration_ms = 1500
         
         copied_state = state.copy()
         
-        # בדיקת שכל המאפיינים הועתקו נכון
+# checking שכל המאפיינים הועתקו נכון
         self.assertEqual(copied_state.state, state.state)
         self.assertEqual(copied_state.is_rest_state, state.is_rest_state)
         self.assertEqual(copied_state.rest_duration_ms, state.rest_duration_ms)
         self.assertEqual(copied_state.moves, state.moves)  # Same reference
         
-        # בדיקת שcopy נקראו על הcomponents
+# checking שcopy נקראו על הcomponents
         self.mock_graphics.copy.assert_called()
         self.mock_physics.copy.assert_called()
         
-        # בדיקת שtransitions מתאפסים במחלקה מועתקת
+# checking שtransitions מתאפסים במחלקה מועתקת
         self.assertEqual(copied_state.transitions, {})
         
     def test_set_transitions(self):
-        """🧪 הגדרת transitions בין states"""
+"""🧪 הגדרת transitions בין states"""
         state = State.State(self.mock_moves, self.mock_graphics, self.mock_physics, "idle")
         
-        # יצירת target states
+# creating target states
         move_state = State.State(self.mock_moves, self.mock_graphics, self.mock_physics, "move")
         jump_state = State.State(self.mock_moves, self.mock_graphics, self.mock_physics, "jump")
         
-        # הגדרת transitions
+# הגדרת transitions
         state.set_transition("move", move_state)
         state.set_transition("jump", jump_state)
         
-        # בדיקת שהtransitions נוספו
+# checking שהtransitions נוספו
         self.assertEqual(len(state.transitions), 2)
         self.assertEqual(state.transitions["move"], move_state)
         self.assertEqual(state.transitions["jump"], jump_state)
         
     def test_reset_state(self):
-        """🧪 בדיקת reset של state"""
+"""🧪 checking reset of state"""
         state = State.State(self.mock_moves, self.mock_graphics, self.mock_physics)
         
         timestamp = int(time.time() * 1000)
@@ -189,43 +189,43 @@ class TestStateBasics(unittest.TestCase):
         
         state.reset(cmd)
         
-        # בדיקת שהstate עודכן
+# checking שהstate עודכן
         self.assertEqual(state.current_command, cmd)
         self.assertEqual(state.state_start_time, timestamp)
         
-        # בדיקת שהcomponents עודכנו
+# checking שהcomponents עודכנו
         self.mock_graphics.reset.assert_called_once_with(cmd)
         self.mock_physics.reset.assert_called_once_with(cmd)
         
     def test_can_transition_logic(self):
-        """🧪 בדיקת לוגיקת can_transition"""
+"""🧪 checking לוגיקת can_transition"""
         state = State.State(self.mock_moves, self.mock_graphics, self.mock_physics)
         
-        # Non-rest state - תמיד יכול לעבור transition
+# Non-rest state - תמיד יכול לעבור transition
         state.is_rest_state = False
         self.assertTrue(state.can_transition(0))
         self.assertTrue(state.can_transition(1000))
         self.assertTrue(state.can_transition(5000))
         
-        # Rest state - תלוי בזמן
+# Rest state - תלוי בזמן
         state.is_rest_state = True
         state.rest_duration_ms = 2000
         state.state_start_time = 1000
         
-        # לפני השלמת הזמן
+# לפני השלמת הזמן
         self.assertFalse(state.can_transition(1500))  # 1500 < 1000 + 2000
         
-        # אחרי השלמת הזמן
+# אחרי השלמת הזמן
         self.assertTrue(state.can_transition(3500))   # 3500 >= 1000 + 2000
         
     def test_get_command(self):
-        """🧪 בדיקת get_command"""
+"""🧪 checking get_command"""
         state = State.State(self.mock_moves, self.mock_graphics, self.mock_physics)
         
-        # בתחילה אין command
+# בתחילה no command
         self.assertIsNone(state.get_command())
         
-        # אחרי reset עם command
+# אחרי reset with command
         cmd = Command.Command(1000, "test_piece", "move", [1, 1])
         state.reset(cmd)
         
@@ -233,7 +233,7 @@ class TestStateBasics(unittest.TestCase):
         self.assertEqual(result, cmd)
         
     def test_update_basic(self):
-        """🧪 בדיקת update בסיסי"""
+"""🧪 checking update basic"""
         state = State.State(self.mock_moves, self.mock_graphics, self.mock_physics)
         
         now_ms = 1000
@@ -243,54 +243,54 @@ class TestStateBasics(unittest.TestCase):
         
         result = state.update(now_ms)
         
-        # בדיקת שהcomponents עודכנו
+# checking שהcomponents עודכנו
         self.mock_graphics.update.assert_called_once_with(now_ms)
         self.mock_physics.update.assert_called_once_with(now_ms)
         
-        # צריך להחזיר את עצמו (אין transitions)
+# צריך להחזיר the עצמו (no transitions)
         self.assertEqual(result, state)
 
 @unittest.skipUnless(HAS_IMPORTS, "Required imports not available")
 class TestStateFactoryFunctions(unittest.TestCase):
-    """🏭 טסטים לפונקציות factory של states"""
+"""🏭 tests לפונקציות factory of states"""
     
     def setUp(self):
-        """🔧 הכנת נתונים לכל טסט"""
+"""🔧 setup data for each test"""
         self.mock_moves = Mock()
         self.mock_graphics = Mock()
         self.mock_physics = Mock()
         self.idle_state = State.State(self.mock_moves, self.mock_graphics, self.mock_physics, "idle")
         
     def test_create_long_rest_state(self):
-        """🧪 יצירת long rest state"""
+"""🧪 creating long rest state"""
         rest_state = State.create_long_rest_state(
             self.idle_state, self.mock_moves, self.mock_graphics, self.mock_physics
         )
         
-        # בדיקת מאפיינים
+# checking מאפיינים
         self.assertEqual(rest_state.state, "long_rest")
         self.assertTrue(rest_state.is_rest_state)
         self.assertEqual(rest_state.rest_duration_ms, 2000)  # 2 seconds
         
-        # בדיקת timeout transition
+# checking timeout transition
         self.assertEqual(rest_state.transitions["timeout"], self.idle_state)
         
     def test_create_short_rest_state(self):
-        """🧪 יצירת short rest state"""
+"""🧪 creating short rest state"""
         rest_state = State.create_short_rest_state(
             self.idle_state, self.mock_moves, self.mock_graphics, self.mock_physics
         )
         
-        # בדיקת מאפיינים
+# checking מאפיינים
         self.assertEqual(rest_state.state, "short_rest")
         self.assertTrue(rest_state.is_rest_state)
         self.assertEqual(rest_state.rest_duration_ms, 1000)  # 1 second
         
-        # בדיקת timeout transition
+# checking timeout transition
         self.assertEqual(rest_state.transitions["timeout"], self.idle_state)
         
     def test_rest_states_durations_comparison(self):
-        """🧪 השוואת משכי זמן בין rest states"""
+"""🧪 השוואת משכי זמן בין rest states"""
         short_rest = State.create_short_rest_state(
             self.idle_state, self.mock_moves, self.mock_graphics, self.mock_physics
         )
@@ -298,16 +298,16 @@ class TestStateFactoryFunctions(unittest.TestCase):
             self.idle_state, self.mock_moves, self.mock_graphics, self.mock_physics
         )
         
-        # long rest צריך להיות יותר ארוך מ-short rest
+# long rest צריך להיות more ארוך מ-short rest
         self.assertGreater(long_rest.rest_duration_ms, short_rest.rest_duration_ms)
         self.assertEqual(long_rest.rest_duration_ms, 2 * short_rest.rest_duration_ms)
 
 @unittest.skipUnless(HAS_IMPORTS, "Required imports not available")
 class TestStateAdvancedScenarios(unittest.TestCase):
-    """🎯 טסטים למקרי שימוש מתקדמים"""
+"""🎯 tests למקרי שימוש advanced"""
     
     def setUp(self):
-        """🔧 הכנת נתונים לכל טסט"""
+"""🔧 setup data for each test"""
         self.mock_moves = Mock()
         self.mock_graphics = Mock()
         self.mock_graphics.copy.return_value = self.mock_graphics
@@ -321,24 +321,24 @@ class TestStateAdvancedScenarios(unittest.TestCase):
         self.mock_physics.is_moving = False
         
     def test_multiple_transitions_chain(self):
-        """🧪 שרשרת של transitions מרובים"""
-        # יצירת שרשרת: idle -> move -> rest -> idle
+"""🧪 שרשרת of transitions מרובים"""
+# creating שרשרת: idle -> move -> rest -> idle
         idle_state = State.State(self.mock_moves, self.mock_graphics, self.mock_physics, "idle")
         move_state = State.State(self.mock_moves, self.mock_graphics, self.mock_physics, "move")
         rest_state = State.State(self.mock_moves, self.mock_graphics, self.mock_physics, "rest")
         
-        # הגדרת transitions
+# הגדרת transitions
         idle_state.set_transition("move", move_state)
         move_state.set_transition("complete", rest_state)
         rest_state.set_transition("timeout", idle_state)
         
-        # בדיקת שכל הtransitions הוגדרו נכון
+# checking שכל הtransitions הוגדרו נכון
         self.assertEqual(idle_state.transitions["move"], move_state)
         self.assertEqual(move_state.transitions["complete"], rest_state)
         self.assertEqual(rest_state.transitions["timeout"], idle_state)
         
     def test_command_types_handling(self):
-        """🧪 טיפול בסוגי פקודות שונים"""
+"""🧪 טיפול בdifferent command types"""
         state = State.State(self.mock_moves, self.mock_graphics, self.mock_physics)
         
         command_types = ["move", "jump", "attack", "defend", "special_ability"]
@@ -352,13 +352,13 @@ class TestStateAdvancedScenarios(unittest.TestCase):
                 self.assertEqual(retrieved_cmd.type, cmd_type)
                 
     def test_timing_precision(self):
-        """🧪 בדיקת דיוק במדידת זמנים"""
+"""🧪 checking דיוק במדידת זמנים"""
         state = State.State(self.mock_moves, self.mock_graphics, self.mock_physics)
         state.is_rest_state = True
         state.rest_duration_ms = 1000
         state.state_start_time = 5000
         
-        # מקרי קצה של timing
+# cases of קצה of timing
         test_cases = [
             (5999, False),  # 1ms לפני סיום
             (6000, True),   # בדיוק בזמן סיום
@@ -371,6 +371,6 @@ class TestStateAdvancedScenarios(unittest.TestCase):
                 self.assertEqual(result, expected)
 
 if __name__ == '__main__':
-    print("🧪 מריץ טסטים מקיפים למחלקת State...")
+print("🧪 running tests comprehensive for class State...")
     print("=" * 60)
     unittest.main(verbosity=2)
