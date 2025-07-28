@@ -1,8 +1,7 @@
-import inspect
-import pathlib
 import pygame
 import queue, threading, time, math
 import cv2
+import numpy as np
 from typing import List, Dict, Tuple, Optional
 from It1_interfaces.Board import Board
 from It1_interfaces.Command import Command
@@ -11,6 +10,7 @@ from It1_interfaces.img import Img
 from It1_interfaces.GameUI import GameUI
 from It1_interfaces.StatisticsManager import StatisticsManager
 from It1_interfaces.ThreadedInputManager import ThreadedInputManager
+from It1_interfaces.EventTypes import GAME_STARTED, GAME_ENDED, MOVE_DONE, PIECE_CAPTURED
 
 
 class InvalidBoard(Exception): ...
@@ -30,11 +30,15 @@ class Game:
         self.statistics_manager = StatisticsManager()
         self.input_manager = ThreadedInputManager(board, self.user_input_queue, debug=False)  # Set debug=True for verbose output
 
+        # Cache board cell dimensions for performance
+        self.cell_width = self.board.cell_W_pix
+        self.cell_height = self.board.cell_H_pix
+
         # --- שינויים: אתחול pygame window להציג משחק (גודל תלוי בגודל הלוח) ---
         pygame.init()
         pygame.font.init()  # Initialize font module
-        self.board_width = self.board.W_cells * self.board.cell_W_pix
-        self.board_height = self.board.H_cells * self.board.cell_H_pix
+        self.board_width = self.board.W_cells * self.cell_width
+        self.board_height = self.board.H_cells * self.cell_height
         self.info_panel_width = 250  # רוחב כל פאנל מידע (שניים)
         self.window_width = self.board_width + (2 * self.info_panel_width)  # פאנל משמאל ומימין
         self.window_height = self.board_height
@@ -68,16 +72,10 @@ class Game:
         for piece in self.pieces.values():
             piece.draw_on_board(board_img, self.game_time_ms())
         
-        # Draw selection rectangles
+        # Get player selections once
         selection = self.input_manager.get_all_selections()
-        for player in ['A', 'B']:
-            pos = selection[player]['pos']
-            color = selection[player]['color']
-            x = pos[1] * self.board.cell_W_pix
-            y = pos[0] * self.board.cell_H_pix
 
         # --- שינוי: המרה מ־board_img.img (OpenCV) ל־pygame Surface ---
-        import numpy as np
         
         # Handle both BGR and BGRA images
         if board_img.img.shape[2] == 4:
@@ -89,18 +87,17 @@ class Game:
         pygame_surface = pygame.surfarray.make_surface(img_rgb.swapaxes(0, 1))
 
         # ציור ריבועי הבחירה על הלוח
-        selection = self.input_manager.get_all_selections()
         for player in ['A', 'B']:
             pos = selection[player]['pos']
             color = selection[player]['color']
-            rect = pygame.Rect(pos[1] * self.board.cell_W_pix, pos[0] * self.board.cell_H_pix,
-                               self.board.cell_W_pix, self.board.cell_H_pix)
+            rect = pygame.Rect(pos[1] * self.cell_width, pos[0] * self.cell_height,
+                               self.cell_width, self.cell_height)
             pygame.draw.rect(pygame_surface, color, rect, 3)
             selected_piece = selection[player]['selected']
             if selected_piece:
                 p_pos = selected_piece.current_state.physics.current_cell
-                rect2 = pygame.Rect(p_pos[1] * self.board.cell_W_pix, p_pos[0] * self.board.cell_H_pix,
-                                    self.board.cell_W_pix, self.board.cell_H_pix)
+                rect2 = pygame.Rect(p_pos[1] * self.cell_width, p_pos[0] * self.cell_height,
+                                    self.cell_width, self.cell_height)
                 pygame.draw.rect(pygame_surface, color, rect2, 5)
 
         # הצגת הלוח במיקום הנכון (אמצע המסך)
@@ -109,7 +106,7 @@ class Game:
         
         # ציור שני פאנלי המידע באמצעות GameUI
         self.ui.draw_player_panels(self.screen, self.board_width, self.window_height, 
-                                  self.pieces, self.input_manager.get_all_selections(), self.start_time, 
+                                  self.pieces, selection, self.start_time, 
                                   self.score_manager, self.move_logger)
         
         pygame.display.flip()
@@ -118,7 +115,6 @@ class Game:
     def run(self):
         """Main game loop."""
         if self.event_bus:
-            from It1_interfaces.EventTypes import GAME_STARTED
             self.event_bus.publish(GAME_STARTED, {"time": self.game_time_ms()})
         print("Game started. Press ESC to exit at any time.")
 
@@ -160,7 +156,6 @@ class Game:
                 # Handle game commands
                 self._process_input(cmd)
                 if self.event_bus:
-                    from It1_interfaces.EventTypes import MOVE_DONE
                     self.event_bus.publish(MOVE_DONE, {"command": cmd})
 
             # (3) Draw current position
@@ -177,7 +172,6 @@ class Game:
         print("🎮 Stopped threaded input manager")
 
         if self.event_bus:
-            from It1_interfaces.EventTypes import GAME_ENDED
             self.event_bus.publish(GAME_ENDED, {"time": self.game_time_ms()})
         
         # Display final statistics before announcing winner
@@ -229,7 +223,6 @@ class Game:
         # Remove captured pieces
         for p in to_remove:
             if self.event_bus:
-                from It1_interfaces.EventTypes import PIECE_CAPTURED
                 self.event_bus.publish(PIECE_CAPTURED, {"piece": p})
             del self.pieces[p.piece_id]
 
@@ -312,3 +305,4 @@ class Game:
             for event in pygame.event.get():
                 if event.type == pygame.KEYDOWN or event.type == pygame.QUIT:
                     waiting = False
+                    
