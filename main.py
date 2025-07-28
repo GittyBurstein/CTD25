@@ -25,11 +25,12 @@ def main():
     animation_manager = AnimationManager()
 
     # Subscribe managers to events
-    from It1_interfaces.EventTypes import MOVE_DONE, PIECE_CAPTURED, GAME_STARTED, GAME_ENDED
+    from It1_interfaces.EventTypes import MOVE_DONE, PIECE_CAPTURED, GAME_STARTED, GAME_ENDED, INVALID_MOVE
     event_bus.subscribe(MOVE_DONE, sound_manager)
     event_bus.subscribe(PIECE_CAPTURED, sound_manager)
     event_bus.subscribe(GAME_STARTED, sound_manager)
     event_bus.subscribe(GAME_ENDED, sound_manager)
+    event_bus.subscribe(INVALID_MOVE, sound_manager)  # ⭐ NEW: Sound for invalid moves
     event_bus.subscribe(MOVE_DONE, score_manager)
     event_bus.subscribe(PIECE_CAPTURED, score_manager)
     event_bus.subscribe(MOVE_DONE, move_logger)
