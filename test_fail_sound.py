@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-🧪 Test Invalid Move Sound
-=========================
+Test Invalid Move Sound
+=======================
 
 Quick test to verify that invalid move sound plays correctly.
 """
@@ -40,7 +40,7 @@ def test_invalid_move_sound():
     # Wait a bit for sound to play
     time.sleep(2)
     
-    print("✅ Test completed! You should have heard the fail sound.")
+    print("Test completed! You should have heard the fail sound.")
     
     # Clean up pygame
     pygame.mixer.quit()

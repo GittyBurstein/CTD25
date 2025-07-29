@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 """
-🧪 Test Pawn Promotion System
-============================
+Test Pawn Promotion System
+==========================
 
-Test the complete pawn promotion implementation.
+Test the complet    print("All promotion system tests completed!")
+    print()
+    print("Summary:")
+    print("  Promotion detection works")
+    print("  Promotion commands can be created")
+    print("  Promotion UI components loaded")
+    print()
+    print("Key mappings for promotion:")romotion implementation.
 """
 
 import pygame
@@ -14,7 +21,7 @@ from It1_interfaces.Command import Command
 
 def test_promotion_detection():
     """Test pawn promotion detection."""
-    print("🧪 Testing Pawn Promotion Detection...")
+    print("Testing Pawn Promotion Detection...")
     
     validator = ChessRulesValidator()
     
@@ -38,14 +45,14 @@ def test_promotion_detection():
     
     for piece, target_pos, expected, description in test_cases:
         result = validator.is_pawn_promotion(piece, target_pos)
-        status = "✅" if result == expected else "❌"
+        status = "PASS" if result == expected else "FAIL"
         print(f"  {status} {description}: {result}")
     
     print()
 
 def test_promotion_command():
     """Test promotion command creation."""
-    print("🧪 Testing Promotion Command Creation...")
+    print("Testing Promotion Command Creation...")
     
     # Test promotion command
     cmd = Command.create_promotion_command(
@@ -56,16 +63,16 @@ def test_promotion_command():
         promotion_piece="Q"
     )
     
-    print(f"  ✅ Command type: {cmd.type}")
-    print(f"  ✅ Piece ID: {cmd.piece_id}")
-    print(f"  ✅ From: {cmd.params[0]}")
-    print(f"  ✅ To: {cmd.params[1]}")
-    print(f"  ✅ Promotion: {cmd.params[2]}")
+    print(f"  [+] Command type: {cmd.type}")
+    print(f"  [+] Piece ID: {cmd.piece_id}")
+    print(f"  [+] From: {cmd.params[0]}")
+    print(f"  [+] To: {cmd.params[1]}")
+    print(f"  [+] Promotion: {cmd.params[2]}")
     print()
 
 def test_promotion_ui_mock():
     """Test promotion UI rendering without pygame window."""
-    print("🧪 Testing Promotion UI Components...")
+    print("Testing Promotion UI Components...")
     
     # Initialize pygame for font rendering
     pygame.init()
@@ -77,15 +84,15 @@ def test_promotion_ui_mock():
     
     # Test piece names
     piece_names = ui.piece_names
-    print(f"  ✅ Queen: {piece_names['Q']}")
-    print(f"  ✅ Rook: {piece_names['R']}")
-    print(f"  ✅ Bishop: {piece_names['B']}")
-    print(f"  ✅ Knight: {piece_names['N']}")
+    print(f"  [+] Queen: {piece_names['Q']}")
+    print(f"  [+] Rook: {piece_names['R']}")
+    print(f"  [+] Bishop: {piece_names['B']}")
+    print(f"  [+] Knight: {piece_names['N']}")
     
     # Test instructions
     instructions = ui.instructions
-    print(f"  ✅ Player A: {instructions['A']}")
-    print(f"  ✅ Player B: {instructions['B']}")
+    print(f"  [+] Player A: {instructions['A']}")
+    print(f"  [+] Player B: {instructions['B']}")
     
     pygame.quit()
     print()

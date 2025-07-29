@@ -9,251 +9,195 @@ from .Piece import Piece
 from .State import State
 
 class PieceFactory:
+    """Creates chess pieces with complete state machines from filesystem structure."""
+    
     def __init__(self, board: Board, pieces_root: pathlib.Path):
-        """Initialize piece factory with board and pieces directory."""
         self.board = board
         self.pieces_root = pieces_root
         self.graphics_factory = GraphicsFactory()
         self.physics_factory = PhysicsFactory(board)
-        
-        # Cache of piece templates
         self.piece_templates: Dict[str, Dict[str, State]] = {}
-        
-        # Build templates from pieces directory
-        self._build_templates()
+        self.build_all_piece_templates()
     
-    def _build_templates(self):
-        """Build piece templates from the pieces directory structure."""
+    def build_all_piece_templates(self):
         if not self.pieces_root.exists():
             print(f"Warning: Pieces directory {self.pieces_root} does not exist")
             return
             
-        for piece_dir in self.pieces_root.iterdir():
-            if piece_dir.is_dir():
+        for piece_directory in self.pieces_root.iterdir():
+            if piece_directory.is_dir():
+                piece_type = piece_directory.name
                 try:
-                    states = self._build_state_machine(piece_dir)
-                    self.piece_templates[piece_dir.name] = states
-                except Exception as e:
-                    print(f"Warning: Could not build template for {piece_dir.name}: {e}")
+                    complete_state_machine = self.build_state_machine_for_piece(piece_directory)
+                    self.piece_templates[piece_type] = complete_state_machine
+                    print(f"✓ Built {piece_type} with {len(complete_state_machine)} states")
+                except Exception as error:
+                    print(f"✗ Failed to build {piece_type}: {error}")
 
-    def _build_state_machine(self, piece_dir: pathlib.Path) -> Dict[str, State]:
-        """Build a state machine for a piece from its directory."""
+    def build_state_machine_for_piece(self, piece_directory: pathlib.Path) -> Dict[str, State]:
+        movement_rules = self.load_movement_rules_from_file(piece_directory)
+        piece_configuration = self.load_piece_configuration_from_file(piece_directory)
         
-        # Load moves
-        moves_file = piece_dir / "moves.txt"
-        moves = Moves(moves_file, (self.board.H_cells, self.board.W_cells))
+        discovered_states = self.discover_existing_states(piece_directory, movement_rules, piece_configuration)
+        self.create_any_missing_essential_states(piece_directory, discovered_states, movement_rules, piece_configuration)
+        self.connect_all_state_transitions(discovered_states)
         
-        # Load config if exists
-        config_file = piece_dir / "config.json"
-        config = {}
-        if config_file.exists():
-            try:
-                with open(config_file) as f:
-                    config = json.load(f)
-            except:
-                pass
-        
-        # Try to build states from directory structure
-        states_dir = piece_dir / "states"
-        states = {}
-        
-        if states_dir.exists() and states_dir.is_dir():
-            for state_dir in states_dir.iterdir():
-                if state_dir.is_dir():
-                    state_name = state_dir.name
-                    
-                    # Load graphics from state-specific sprites directory
-                    sprites_dir = state_dir / "sprites"
-                    graphics = self.graphics_factory.create(
-                        sprites_dir, 
-                        config.get(state_name, {}), 
-                        (self.board.cell_W_pix, self.board.cell_H_pix),
-                        state_name  # Pass the state name
-                    )
-                    
-                    # Create physics (will be customized per instance)
-                    physics = self.physics_factory.create(
-                        (0, 0), 
-                        config.get(state_name, {})
-                    )
-                    
-                    # Create state with special properties
-                    state = State(moves, graphics, physics, state_name)
-                    
-                    # Configure rest states
-                    if state_name == "long_rest":
-                        state.is_rest_state = True
-                        state.rest_duration_ms = 3000  # 3 seconds
-                    elif state_name == "short_rest":
-                        state.is_rest_state = True
-                        state.rest_duration_ms = 2000  # 2 seconds
-                    elif state_name == "jump":
-                        state.is_rest_state = True
-                        state.rest_duration_ms = 1500  # 1.5 seconds for jump animation
-                    
-                    states[state_name] = state
-                    # Debugging: Verify state creation
-        
-        # If no states found or missing critical states, create them programmatically
-        missing_states = self._get_missing_states(states)
-        if missing_states:
-            self._create_missing_states(piece_dir, states, moves, config, missing_states)
-        
-        # Set up transitions between states
-        self._setup_transitions(states)
-        
-        return states
+        return discovered_states
     
-    def _get_missing_states(self, states: Dict[str, State]) -> list:
-        """Check which essential states are missing."""
-        required_states = ["idle", "move", "long_rest"]
-        missing = []
-        
-        for state_name in required_states:
-            if state_name not in states:
-                missing.append(state_name)
-        
-        # Debugging: Verify missing states
-        
-        return missing
+    def load_movement_rules_from_file(self, piece_directory: pathlib.Path) -> Moves:
+        moves_file = piece_directory / "moves.txt"
+        return Moves(moves_file, (self.board.H_cells, self.board.W_cells))
     
-    def _create_missing_states(self, piece_dir: pathlib.Path, states: Dict[str, State], 
-                             moves: Moves, config: dict, missing_states: list):
-        """Create missing states programmatically."""
+    def load_piece_configuration_from_file(self, piece_directory: pathlib.Path) -> dict:
+        config_file = piece_directory / "config.json"
+        if not config_file.exists():
+            return {}
+        try:
+            with open(config_file) as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as error:
+            print(f"Warning: Invalid config.json for {piece_directory.name}: {error}")
+            return {}
+    
+    def discover_existing_states(self, piece_directory: pathlib.Path, movement_rules: Moves, config: dict) -> Dict[str, State]:
+        states_directory = piece_directory / "states"
+        found_states = {}
         
-        for state_name in missing_states:
+        if not (states_directory.exists() and states_directory.is_dir()):
+            return found_states
             
-            # Try to load state-specific graphics first
-            state_sprites_dir = piece_dir / "states" / state_name / "sprites"
-            
-            if not state_sprites_dir.exists():
-                # Fallback to general sprites directory
-                state_sprites_dir = piece_dir / "sprites"
-            
-            # Create graphics for this specific state
-            graphics = self.graphics_factory.create(
-                state_sprites_dir,
-                config.get(state_name, {}),
-                (self.board.cell_W_pix, self.board.cell_H_pix),
-                state_name  # Pass the state name
-            )
-            
-            # Create physics
-            physics = self.physics_factory.create((0, 0), config.get(state_name, {}))
-            
-            # Create state
-            state = State(moves, graphics, physics, state_name)
-            
-            # Configure special properties
-            if state_name == "long_rest":
-                state.is_rest_state = True
-                state.rest_duration_ms = 3000  # 3 seconds
-            elif state_name == "short_rest":
-                state.is_rest_state = True
-                state.rest_duration_ms = 2000  # 2 seconds
-            
-            states[state_name] = state
-            # Debugging: Verify state creation
-
-    def _setup_transitions(self, states: Dict[str, State]):
-        """Set up transitions between states."""
-        
-        # Basic transitions for movement
-        if "idle" in states:
-            if "move" in states:
-                # Debugging: Verify available states
-
-                # Debugging: Verify transition from 'idle' to 'move'
-                if "idle" in states and "move" in states:
-                    states["idle"].set_transition("Move", states["move"])
-            
-            if "jump" in states:
-                states["idle"].set_transition("Jump", states["jump"])
+        for state_directory in states_directory.iterdir():
+            if state_directory.is_dir():
+                state_name = state_directory.name
+                state_object = self.create_state_from_directory(state_directory, state_name, movement_rules, config)
+                found_states[state_name] = state_object
                 
-            if "attack" in states:
-                states["idle"].set_transition("Attack", states["attack"])
+        return found_states
+    
+    def create_state_from_directory(self, state_directory: pathlib.Path, state_name: str, movement_rules: Moves, config: dict) -> State:
+        sprites_directory = state_directory / "sprites"
+        graphics = self.graphics_factory.create(
+            sprites_directory, 
+            config.get(state_name, {}), 
+            (self.board.cell_W_pix, self.board.cell_H_pix),
+            state_name
+        )
         
-        # Move completion transitions
-        if "move" in states:
-            if "long_rest" in states:
-                states["move"].set_transition("complete", states["long_rest"])
-            elif "idle" in states:
-                states["move"].set_transition("complete", states["idle"])
+        physics = self.physics_factory.create((0, 0), config.get(state_name, {}))
+        state = State(movement_rules, graphics, physics, state_name)
+        self.apply_special_state_properties(state, state_name)
+        return state
+    
+    def apply_special_state_properties(self, state: State, state_name: str):
+        rest_timing_config = {
+            "long_rest": (True, 3000),
+            "short_rest": (True, 2000),
+            "jump": (True, 1500)
+        }
         
-        # Jump completion transitions
-        if "jump" in states:
-            if "short_rest" in states:
-                states["jump"].set_transition("complete", states["short_rest"])
-                states["jump"].set_transition("timeout", states["short_rest"])  # Add timeout transition
-            elif "idle" in states:
-                states["jump"].set_transition("complete", states["idle"])
-                states["jump"].set_transition("timeout", states["idle"])  # Add timeout transition
+        if state_name in rest_timing_config:
+            is_rest, duration_ms = rest_timing_config[state_name]
+            state.is_rest_state = is_rest
+            state.rest_duration_ms = duration_ms
+    
+    def create_any_missing_essential_states(self, piece_directory: pathlib.Path, existing_states: Dict[str, State], movement_rules: Moves, config: dict):
+        essential_states = ["idle", "move", "long_rest"]
+        missing_states = [state for state in essential_states if state not in existing_states]
         
-        # Rest state timeout transitions
-        if "long_rest" in states and "idle" in states:
-            states["long_rest"].set_transition("timeout", states["idle"])
+        for missing_state_name in missing_states:
+            fallback_state = self.create_state_with_fallback_graphics(piece_directory, missing_state_name, movement_rules, config)
+            existing_states[missing_state_name] = fallback_state
+    
+    def create_state_with_fallback_graphics(self, piece_directory: pathlib.Path, state_name: str, movement_rules: Moves, config: dict) -> State:
+        state_specific_sprites = piece_directory / "states" / state_name / "sprites"
+        fallback_sprites = piece_directory / "sprites"
+        sprites_directory = state_specific_sprites if state_specific_sprites.exists() else fallback_sprites
         
-        if "short_rest" in states and "idle" in states:
-            states["short_rest"].set_transition("timeout", states["idle"])
+        graphics = self.graphics_factory.create(
+            sprites_directory,
+            config.get(state_name, {}),
+            (self.board.cell_W_pix, self.board.cell_H_pix),
+            state_name
+        )
         
-        # Attack completion
-        if "attack" in states and "idle" in states:
-            states["attack"].set_transition("complete", states["idle"])
-        
-        # Print all transitions for debugging
-        for state_name, state in states.items():
-            transitions_list = list(state.transitions.keys())
+        physics = self.physics_factory.create((0, 0), config.get(state_name, {}))
+        state = State(movement_rules, graphics, physics, state_name)
+        self.apply_special_state_properties(state, state_name)
+        return state
 
-    def create_piece(self, p_type: str, cell: Tuple[int, int]) -> Piece:
-        """Create a piece of the specified type at the given cell."""
-        if p_type not in self.piece_templates:
-            raise ValueError(f"Unknown piece type: {p_type}")
+    def connect_all_state_transitions(self, states: Dict[str, State]):
+        transition_rules = [
+            ("idle", "Move", "move"),
+            ("idle", "Jump", "jump"), 
+            ("idle", "Attack", "attack"),
+            ("move", "complete", "long_rest"),
+            ("move", "complete", "idle"),
+            ("jump", "complete", "short_rest"),
+            ("jump", "timeout", "short_rest"),
+            ("jump", "complete", "idle"),
+            ("jump", "timeout", "idle"),
+            ("attack", "complete", "idle"),
+            ("long_rest", "timeout", "idle"),
+            ("short_rest", "timeout", "idle")
+        ]
         
+        for from_state, event_trigger, to_state in transition_rules:
+            self.create_transition_if_both_states_exist(states, from_state, event_trigger, to_state)
+    
+    def create_transition_if_both_states_exist(self, states: Dict[str, State], from_state: str, event_trigger: str, to_state: str):
+        if from_state in states and to_state in states:
+            states[from_state].set_transition(event_trigger, states[to_state])
+
+    def create_piece(self, piece_type: str, board_position: Tuple[int, int]) -> Piece:
+        if piece_type not in self.piece_templates:
+            available_types = list(self.piece_templates.keys())
+            raise ValueError(f"Unknown piece type: {piece_type}. Available: {available_types}")
         
-        # Clone the template state machine
-        template_states = self.piece_templates[p_type]
+        template_states = self.piece_templates[piece_type]
+        independent_states = self.clone_template_states_for_new_piece(piece_type, template_states, board_position)
+        self.clone_template_transitions_for_new_piece(template_states, independent_states)
         
-        # Create new states for this piece instance
-        new_states = {}
+        initial_state = independent_states.get("idle", list(independent_states.values())[0])
+        unique_piece_id = self.generate_unique_piece_id(piece_type, board_position, initial_state)
+        
+        return Piece(unique_piece_id, initial_state, piece_type)
+    
+    def clone_template_states_for_new_piece(self, piece_type: str, template_states: Dict[str, State], board_position: Tuple[int, int]) -> Dict[str, State]:
+        independent_states = {}
+        
         for state_name, template_state in template_states.items():
-            # Create new components
-            moves = template_state.moves  # Moves can be shared
+            fresh_graphics = self.create_fresh_graphics_for_piece_instance(piece_type, state_name)
+            positioned_physics = self.physics_factory.create(board_position, {})
             
-            # Create NEW graphics with proper state_name (don't copy old ones)
-            # Find the sprites directory for this piece type and state
-            state_sprites_dir = self.pieces_root / p_type / "states" / state_name / "sprites"
-            if not state_sprites_dir.exists():
-                state_sprites_dir = self.pieces_root / p_type / "sprites"
+            independent_state = State(template_state.moves, fresh_graphics, positioned_physics, state_name)
+            independent_state.is_rest_state = template_state.is_rest_state
+            independent_state.rest_duration_ms = template_state.rest_duration_ms
             
-            graphics = self.graphics_factory.create(
-                state_sprites_dir,
-                {},  # config
-                (self.board.cell_W_pix, self.board.cell_H_pix),
-                state_name  # Pass the state name - THIS IS THE KEY FIX!
-            )
+            independent_states[state_name] = independent_state
             
-            physics = self.physics_factory.create(cell, {})
-            
-            # Create new state
-            new_state = State(moves, graphics, physics, state_name)
-            new_state.is_rest_state = template_state.is_rest_state
-            new_state.rest_duration_ms = template_state.rest_duration_ms
-            new_states[state_name] = new_state
+        return independent_states
+    
+    def create_fresh_graphics_for_piece_instance(self, piece_type: str, state_name: str):
+        state_specific_sprites = self.pieces_root / piece_type / "states" / state_name / "sprites"
+        fallback_sprites = self.pieces_root / piece_type / "sprites"
+        sprites_directory = state_specific_sprites if state_specific_sprites.exists() else fallback_sprites
         
-        # Set up transitions between the new states
+        return self.graphics_factory.create(
+            sprites_directory,
+            {},
+            (self.board.cell_W_pix, self.board.cell_H_pix),
+            state_name
+        )
+    
+    def clone_template_transitions_for_new_piece(self, template_states: Dict[str, State], independent_states: Dict[str, State]):
         for state_name, template_state in template_states.items():
-            for event, target_template in template_state.transitions.items():
+            if state_name not in independent_states:
+                continue
+                
+            for event_trigger, target_template in template_state.transitions.items():
                 target_state_name = target_template.state
-                if target_state_name in new_states:
-                    new_states[state_name].set_transition(event, new_states[target_state_name])
-        
-        # Get the initial state (idle by default)
-        initial_state = new_states.get("idle", list(new_states.values())[0])
-        
-        # Generate unique piece ID
-        piece_id = f"{p_type}_{cell[0]}_{cell[1]}_{id(initial_state)}"
-        
-        piece = Piece(piece_id, initial_state, p_type)
-        # Debugging: Verify initial state transitions
-        
-        return piece
+                if target_state_name in independent_states:
+                    independent_states[state_name].set_transition(event_trigger, independent_states[target_state_name])
+    
+    def generate_unique_piece_id(self, piece_type: str, board_position: Tuple[int, int], state: State) -> str:
+        return f"{piece_type}_{board_position[0]}_{board_position[1]}_{id(state)}"

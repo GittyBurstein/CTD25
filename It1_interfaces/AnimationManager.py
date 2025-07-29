@@ -1,54 +1,81 @@
+"""Game animation manager with queue and state tracking."""
+from typing import List, Dict, Any
 from It1_interfaces.EventTypes import GAME_STARTED, GAME_ENDED
 import time
 
-class AnimationManager:
+class GameAnimationQueue:
     def __init__(self):
-        self.active_animations = []
-        self.game_state = "waiting"
+        self.animations: List[Dict[str, Any]] = []
+        self.game_state: str = "waiting"
+        self.start_time: float = 0.0
     
-    def update(self, event_type, data):
+    def handle_game_event(self, event_type: str, data: Dict[str, Any]) -> None:
         if event_type == GAME_STARTED:
             self.game_state = "playing"
-            game_time = data.get("time", 0) if data else 0
-            
-            # You could add startup animations here
-            # self.add_game_start_animation()
-            
         elif event_type == GAME_ENDED:
             self.game_state = "ended"
-            game_time = data.get("time", 0) if data else 0
-            
-            # You could add ending animations here
-            # self.add_game_end_animation()
-            self.cleanup_animations()
+            self.clear_all_animations()
     
-    def add_animation(self, animation_type, duration_ms, target=None):
-        """Add a new animation to the queue."""
+    def add_animation(self, animation_type: str, duration_ms: int, target: Any = None, 
+                     properties: Dict[str, Any] = None) -> Dict[str, Any]:
+        if duration_ms <= 0:
+            raise ValueError("Animation duration must be positive")
+            
         animation = {
             "type": animation_type,
             "duration": duration_ms,
             "start_time": time.time() * 1000,
-            "target": target
+            "target": target,
+            "completed": False,
+            "progress": 0.0,
+            "properties": properties or {},
+            "id": f"{animation_type}_{time.time()}"
         }
-        self.active_animations.append(animation)
+        self.animations.append(animation)
+        return animation
     
-    def update_animations(self, current_time_ms):
-        """Update all active animations."""
+    def update_all_animations(self, current_time_ms: int) -> List[Dict[str, Any]]:
         completed = []
-        for i, animation in enumerate(self.active_animations):
-            elapsed = current_time_ms - animation["start_time"]
-            if elapsed >= animation["duration"]:
-                completed.append(i)
+        active = []
         
-        # Remove completed animations (reverse order to maintain indices)
-        for i in reversed(completed):
-            animation = self.active_animations.pop(i)
+        for anim in self.animations:
+            elapsed = current_time_ms - anim["start_time"]
+            if elapsed >= anim["duration"]:
+                anim["completed"] = True
+                completed.append(anim)
+            else:
+                anim["progress"] = elapsed / anim["duration"]
+                active.append(anim)
+        
+        self.animations = active
+        return completed
     
-    def cleanup_animations(self):
-        """Clean up all animations."""
-        count = len(self.active_animations)
-        self.active_animations.clear()
+    def clear_all_animations(self) -> None:
+        self.animations.clear()
     
-    def get_animation_count(self):
-        """Get number of active animations."""
-        return len(self.active_animations)
+    def get_active_count(self) -> int:
+        return len(self.animations)
+        
+    def has_active_animations(self) -> bool:
+        return bool(self.animations)
+        
+    def find_animation_by_id(self, animation_id: str) -> Dict[str, Any]:
+        for animation in self.animations:
+            if animation.get("id") == animation_id:
+                return animation
+        return None
+        
+    def remove_animation_by_id(self, animation_id: str) -> bool:
+        for i, animation in enumerate(self.animations):
+            if animation.get("id") == animation_id:
+                self.animations.pop(i)
+                return True
+        return False
+
+# Backward compatibility methods
+    def update(self, event_type: str, data: Dict[str, Any]) -> None:
+        """Backward compatibility for EventBus."""
+        return self.handle_game_event(event_type, data)
+
+# Backward compatibility
+AnimationManager = GameAnimationQueue

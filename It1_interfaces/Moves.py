@@ -1,94 +1,104 @@
 import pathlib
 from typing import List, Tuple
 
-class Moves:
-    """
-    A class to manage move patterns for game pieces, based on a text file.
+class PieceMovementRules:
+    """Manages valid movement patterns for chess pieces from configuration files."""
 
-    The move definitions are parsed from a text file, and stored as (dr, dc) tuples
-    which represent vertical and horizontal deltas from a current board position.
-    """
+    def __init__(self, movement_file_path: pathlib.Path, board_dimensions: Tuple[int, int]):
+        self.board_height, self.board_width = board_dimensions
+        self.movement_deltas: List[Tuple[int, int]] = []
+        self.load_movement_patterns_from_file(movement_file_path)
 
-    def __init__(self, txt_path: pathlib.Path, dims: Tuple[int, int]):
-        """
-        Initialize the Moves object.
+    def load_movement_patterns_from_file(self, file_path: pathlib.Path):
+        if not file_path.exists():
+            return
+            
+        with open(file_path, 'r') as movement_file:
+            for line in movement_file:
+                movement_delta = self.parse_movement_line(line.strip())
+                if movement_delta:
+                    self.movement_deltas.append(movement_delta)
 
-        Args:
-            txt_path (pathlib.Path): Path to the text file containing move definitions.
-            dims (Tuple[int, int]): Board dimensions as (height, width).
-        """
-        self.board_height, self.board_width = dims
-        self.move_deltas: List[Tuple[int, int]] = []
-
-        if txt_path.exists():
-            with open(txt_path, 'r') as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or line.startswith('#'):
-                        continue  # Skip comments and empty lines
-
-                    if ':' in line:
-                        # Format like "1,0:non_capture"
-                        coords_part = line.split(':')[0].strip()
-                    else:
-                        coords_part = line.strip()
-
-                    if ',' in coords_part:
-                        try:
-                            dr, dc = map(int, coords_part.split(','))  # Fixed: row,col not col,row!
-                            self.move_deltas.append((dr, dc))  # store as (row_delta, col_delta)
-                        except ValueError:
-                            continue  # Skip invalid format lines
+    def parse_movement_line(self, line: str) -> Tuple[int, int] | None:
+        if not line or line.startswith('#'):
+            return None
+            
+        coordinates_text = line.split(':')[0].strip() if ':' in line else line.strip()
+        
+        if ',' not in coordinates_text:
+            return None
+            
+        try:
+            row_delta, col_delta = map(int, coordinates_text.split(','))
+            return (row_delta, col_delta)
+        except ValueError:
+            return None
 
 
-    def get_moves(self, r: int, c: int) -> List[Tuple[int, int]]:
-        """
-        Calculate all valid moves from the given position (r, c).
+    def calculate_valid_moves_from_position(self, current_row: int, current_col: int) -> List[Tuple[int, int]]:
+        valid_target_positions = []
+        
+        for row_delta, col_delta in self.movement_deltas:
+            target_row = current_row + row_delta
+            target_col = current_col + col_delta
+            
+            if self.is_position_within_board_bounds(target_row, target_col):
+                valid_target_positions.append((target_row, target_col))
+        
+        return valid_target_positions
 
-        Args:
-            r (int): Current row position.
-            c (int): Current column position.
+    def is_position_within_board_bounds(self, row: int, col: int) -> bool:
+        return 0 <= row < self.board_height and 0 <= col < self.board_width
 
-        Returns:
-            List[Tuple[int, int]]: List of valid target cells after applying move deltas.
-        """
-        valid_moves = []
-
-
-        for dr, dc in self.move_deltas:
-            new_r = r + dr
-            new_c = c + dc
-            if 0 <= new_r < self.board_height and 0 <= new_c < self.board_width:
-                valid_moves.append((new_r, new_c))
-
-        return valid_moves
-
-    def is_path_blocked(self, start_pos, end_pos, piece_type, all_pieces):
-        """Check if the path from start_pos to end_pos is blocked by other pieces."""
-        # Knights can jump over other pieces
-        if piece_type == "N":
+    def is_movement_path_blocked_by_pieces(self, start_position, target_position, piece_type, all_game_pieces):
+        if self.can_piece_type_jump_over_obstacles(piece_type):
             return False
         
+        path_squares = self.calculate_path_squares_between_positions(start_position, target_position)
+        return self.any_square_occupied_by_piece(path_squares, all_game_pieces)
+
+    def can_piece_type_jump_over_obstacles(self, piece_type: str) -> bool:
+        return piece_type == "N"  # Knights can jump over other pieces
+
+    def calculate_path_squares_between_positions(self, start_pos, end_pos) -> List[Tuple[int, int]]:
         start_row, start_col = start_pos
         end_row, end_col = end_pos
         
-        # Calculate direction of movement
-        row_dir = 0 if start_row == end_row else (1 if end_row > start_row else -1)
-        col_dir = 0 if start_col == end_col else (1 if end_col > start_col else -1)
+        movement_direction = self.calculate_movement_direction(start_pos, end_pos)
+        path_squares = []
         
-        # Check each square along the path (excluding start and end)
-        current_row = start_row + row_dir
-        current_col = start_col + col_dir
+        current_row, current_col = start_row + movement_direction[0], start_col + movement_direction[1]
         
         while (current_row, current_col) != (end_row, end_col):
-            # Check if there's a piece at this position
-            for piece in all_pieces.values():
-                piece_pos = tuple(piece.current_state.physics.current_cell)
-                if piece_pos == (current_row, current_col):
-                    return True
-            
-            # Move to next position along the path
-            current_row += row_dir
-            current_col += col_dir
+            path_squares.append((current_row, current_col))
+            current_row += movement_direction[0]
+            current_col += movement_direction[1]
         
-        return False
+        return path_squares
+
+    def calculate_movement_direction(self, start_pos, end_pos) -> Tuple[int, int]:
+        start_row, start_col = start_pos
+        end_row, end_col = end_pos
+        
+        row_direction = 0 if start_row == end_row else (1 if end_row > start_row else -1)
+        col_direction = 0 if start_col == end_col else (1 if end_col > start_col else -1)
+        
+        return (row_direction, col_direction)
+
+    def any_square_occupied_by_piece(self, squares_to_check, all_game_pieces) -> bool:
+        occupied_positions = {tuple(piece.current_state.physics.current_board_cell) for piece in all_game_pieces.values()}
+        return any(square in occupied_positions for square in squares_to_check)
+    
+    # Legacy aliases for backward compatibility
+    def get_moves(self, r: int, c: int) -> List[Tuple[int, int]]:
+        return self.calculate_valid_moves_from_position(r, c)
+    
+    def is_path_blocked(self, start_pos, end_pos, piece_type, all_pieces):
+        return self.is_movement_path_blocked_by_pieces(start_pos, end_pos, piece_type, all_pieces)
+    
+    @property
+    def move_deltas(self):
+        return self.movement_deltas
+
+# Legacy class alias
+Moves = PieceMovementRules

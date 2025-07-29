@@ -68,9 +68,9 @@ class TestPiece(unittest.TestCase):
                 self.assertEqual(piece.current_state, self.mock_state)
                 self.assertEqual(piece.piece_type, "P")
                 self.assertEqual(piece.color, "White")
-                self.assertEqual(piece.move_count, 0)
-                self.assertFalse(piece.has_moved)
-                self.assertEqual(piece.cooldown_duration, 2000)
+                self.assertEqual(piece.movement_tracker.move_count, 0)
+                self.assertFalse(piece.movement_tracker.has_moved)
+                self.assertEqual(piece.cooldown_system.cooldown_duration_ms, 2000)
     
     def test_piece_initialization_black_pieces(self):
         """🧪 Test piece initialization with black piece IDs"""
@@ -139,19 +139,19 @@ class TestPiece(unittest.TestCase):
         piece = Piece("PW1", self.mock_state, "P")
         
         # Set some state
-        piece.move_count = 5
-        piece.has_moved = True
-        piece.last_action_time = self.current_time - 1000
+        piece.movement_tracker.move_count = 5
+        piece.movement_tracker.has_moved = True
+        piece.cooldown_system.last_action_time = self.current_time - 1000
         
         # Reset piece
         reset_time = self.current_time + 1000
-        piece.reset(reset_time)
+        piece.reset_piece_to_initial_state(reset_time)
         
         # Verify reset
         self.assertEqual(piece.start_time, reset_time)
-        self.assertEqual(piece.last_action_time, reset_time)
-        self.assertEqual(piece.move_count, 0)
-        self.assertFalse(piece.has_moved)
+        self.assertEqual(piece.cooldown_system.last_action_time, reset_time)
+        self.assertEqual(piece.movement_tracker.move_count, 0)
+        self.assertFalse(piece.movement_tracker.has_moved)
         self.mock_state.reset.assert_called_once()
     
     def test_piece_update(self):

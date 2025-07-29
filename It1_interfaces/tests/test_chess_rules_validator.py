@@ -45,7 +45,10 @@ class TestChessRulesValidator(unittest.TestCase):
         pawn.piece_type = "P"
         pawn.color = color
         pawn.piece_id = piece_id
-        pawn.has_moved = has_moved
+        
+        # Create mock movement tracker
+        pawn.movement_tracker = Mock()
+        pawn.movement_tracker.has_moved = has_moved
         
         # Mock moves object for path blocking
         pawn.current_state = Mock()

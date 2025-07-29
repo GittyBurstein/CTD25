@@ -1,5 +1,6 @@
 import time
-from typing import Dict, List
+from typing import Dict, List, Tuple
+from collections import defaultdict
 
 
 class StatisticsManager:
@@ -7,104 +8,109 @@ class StatisticsManager:
     
     def __init__(self):
         """Initialize the statistics manager."""
-        pass
+        self.piece_names = {
+            "P": "Pawns", "R": "Rooks", "N": "Knights", 
+            "B": "Bishops", "Q": "Queens", "K": "Kings"
+        }
     
     def display_final_statistics(self, pieces: Dict, start_time: float):
         """Display final game statistics from all managers."""
-        print("\n" + "="*60)
-        print("🎮 FINAL GAME STATISTICS 🎮")
-        print("="*60)
+        self._print_header("FINAL GAME STATISTICS", 60)
         
         game_duration = time.time() - start_time
-        print(f"⏱️  Game Duration: {game_duration:.1f} seconds")
-        print(f"🎯 Total Pieces Remaining: {len(pieces)}")
+        print(f"  Game Duration: {game_duration:.1f} seconds")
+        print(f" Total Pieces Remaining: {len(pieces)}")
         
-        # Count pieces by color and type
         self.print_piece_counts(pieces)
         print("="*60)
 
     def display_live_statistics(self, pieces: Dict, start_time: float):
         """Display live game statistics during gameplay."""
-        print("\n" + "="*50)
-        print("📊 LIVE GAME STATISTICS 📊")
-        print("="*50)
+        self._print_header("LIVE GAME STATISTICS", 50)
         
         game_duration = time.time() - start_time
-        print(f"⏱️  Game Time: {game_duration:.1f}s")
+        print(f"  Game Time: {game_duration:.1f}s")
         
-        # Count pieces and states
         self.print_live_counts(pieces)
         print("="*50)
         print("Press TAB again for updated stats, ESC to quit")
 
-    def _count_pieces_by_color(self, pieces: Dict):
+    def _print_header(self, title: str, width: int):
+        """Print a formatted header."""
+        print("\n" + "="*width)
+        print(f" {title} ")
+        print("="*width)
+
+    def _count_pieces_by_color(self, pieces: Dict) -> Tuple[int, int]:
         """Helper function to count pieces by color."""
-        white_pieces = len([p for p in pieces.values() if hasattr(p, 'color') and p.color == "White"])
-        black_pieces = len([p for p in pieces.values() if hasattr(p, 'color') and p.color == "Black"])
+        white_pieces = sum(1 for p in pieces.values() 
+                          if hasattr(p, 'color') and p.color == "White")
+        black_pieces = sum(1 for p in pieces.values() 
+                          if hasattr(p, 'color') and p.color == "Black")
         return white_pieces, black_pieces
+
+    def _count_pieces_by_type(self, pieces: Dict) -> Dict:
+        """Count pieces by type and color."""
+        piece_counts = defaultdict(lambda: {"White": 0, "Black": 0})
+        
+        for piece in pieces.values():
+            if hasattr(piece, 'piece_type') and hasattr(piece, 'color'):
+                piece_counts[piece.piece_type][piece.color] += 1
+        
+        return dict(piece_counts)
     
     def print_piece_counts(self, pieces: Dict):
         """Print piece counts by color and type."""
         white_pieces, black_pieces = self._count_pieces_by_color(pieces)
         
-        print(f"⚪ White Pieces: {white_pieces}")
-        print(f"⚫ Black Pieces: {black_pieces}")
+        print(f" White Pieces: {white_pieces}")
+        print(f" Black Pieces: {black_pieces}")
         
-        # Count by type
-        piece_counts = {}
-        for piece in pieces.values():
-            if hasattr(piece, 'piece_type'):
-                piece_type = piece.piece_type
-                if piece_type not in piece_counts:
-                    piece_counts[piece_type] = {"White": 0, "Black": 0}
-                if hasattr(piece, 'color'):
-                    piece_counts[piece_type][piece.color] += 1
+        piece_counts = self._count_pieces_by_type(pieces)
         
-        print("\n📊 Remaining Pieces by Type:")
-        piece_names = {"P": "Pawns", "R": "Rooks", "N": "Knights", "B": "Bishops", "Q": "Queens", "K": "Kings"}
+        print("\n Remaining Pieces by Type:")
         for piece_type, counts in piece_counts.items():
-            name = piece_names.get(piece_type, f"Type {piece_type}")
+            name = self.piece_names.get(piece_type, f"Type {piece_type}")
             print(f"   {name}: White {counts['White']}, Black {counts['Black']}")
 
     def print_live_counts(self, pieces: Dict):
         """Print live piece and state counts."""
         white_pieces, black_pieces = self._count_pieces_by_color(pieces)
         
-        print(f"⚪ White Pieces: {white_pieces}")
-        print(f"⚫ Black Pieces: {black_pieces}")
+        print(f" White Pieces: {white_pieces}")
+        print(f" Black Pieces: {black_pieces}")
         
-        # Count kings and states
-        kings = [p for p in pieces.values() if p.piece_type == "K"]
-        white_kings = len([k for k in kings if k.color == "White"])
-        black_kings = len([k for k in kings if k.color == "Black"])
+        self._print_kings_count(pieces)
+        self._print_movement_stats(pieces)
+        self._print_state_breakdown(pieces)
+        print(" Controls: TAB=stats, ESC=quit")
+
+    def _print_kings_count(self, pieces: Dict):
+        """Print king counts by color."""
+        kings = [p for p in pieces.values() if hasattr(p, 'piece_type') and p.piece_type == "K"]
+        white_kings = sum(1 for k in kings if hasattr(k, 'color') and k.color == "White")
+        black_kings = sum(1 for k in kings if hasattr(k, 'color') and k.color == "Black")
+        print(f" Kings: White {white_kings}, Black {black_kings}")
+
+    def _print_movement_stats(self, pieces: Dict):
+        """Print movement statistics."""
+        moving_pieces = sum(1 for p in pieces.values() 
+                           if hasattr(p, 'current_state') and p.current_state.physics.is_moving)
+        idle_pieces = sum(1 for p in pieces.values() 
+                         if hasattr(p, 'current_state') and p.current_state.state == "idle")
         
-        moving_pieces = len([p for p in pieces.values() if p.current_state.physics.is_moving])
-        idle_pieces = len([p for p in pieces.values() if p.current_state.state == "idle"])
+        print(f" Moving Pieces: {moving_pieces}")
+        print(f" Idle Pieces: {idle_pieces}")
+
+    def _print_state_breakdown(self, pieces: Dict):
+        """Print state breakdown for all pieces."""
+        state_counts = defaultdict(int)
         
-        # Count pieces by state
-        state_counts = {}
         for piece in pieces.values():
-            state = piece.current_state.state
-            if state not in state_counts:
-                state_counts[state] = 0
-            state_counts[state] += 1
+            if hasattr(piece, 'current_state'):
+                state_counts[piece.current_state.state] += 1
         
-        print(f"👑 Kings: White {white_kings}, Black {black_kings}")
-        print(f"🏃 Moving Pieces: {moving_pieces}")
-        print(f"💤 Idle Pieces: {idle_pieces}")
-        
-        # Show state breakdown
-        print(f"📊 States: ", end="")
+        print(" States: ", end="")
         for state, count in state_counts.items():
-            if state == "jump":
-                print(f"🦘{state}:{count} ", end="")
-            elif state == "short_rest":
-                print(f"😴{state}:{count} ", end="")
-            elif state == "long_rest":
-                print(f"💤{state}:{count} ", end="")
-            else:
-                print(f"{state}:{count} ", end="")
+            print(f"{state}:{count} ", end="")
         print()  # New line
-        
-        # Show controls reminder
-        print("🎮 Controls: TAB=stats, ESC=quit")

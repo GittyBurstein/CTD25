@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-🧪 Test Promotion UI
-===================
+Test Promotion UI
+=================
 
 Quick test to see how the promotion popup looks.
 """
@@ -17,7 +17,7 @@ def test_promotion_ui():
     # Create a test window
     screen_width, screen_height = 800, 600
     screen = pygame.display.set_mode((screen_width, screen_height))
-    pygame.display.set_caption("🎮 Pawn Promotion Test")
+    pygame.display.set_caption("Pawn Promotion Test")
     
     # Create promotion UI
     promotion_ui = PromotionUI(screen_width, screen_height)
@@ -28,7 +28,7 @@ def test_promotion_ui():
     player = "A"
     clock = pygame.time.Clock()
     
-    print("🎮 Promotion UI Test - Use Arrow Keys to navigate, ESC to exit")
+    print("Promotion UI Test - Use Arrow Keys to navigate, ESC to exit")
     
     running = True
     while running:
@@ -65,7 +65,7 @@ def test_promotion_ui():
         clock.tick(60)
     
     pygame.quit()
-    print("✅ Promotion UI test completed!")
+    print("Promotion UI test completed!")
 
 if __name__ == "__main__":
     test_promotion_ui()
