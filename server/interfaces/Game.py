@@ -35,7 +35,7 @@ class Game:
         self.score_manager = score_manager
         self.move_logger = move_logger
         self.statistics_manager = StatisticsManager()
-        self.input_manager = ThreadedInputManager(board, self.user_input_queue, event_bus, debug=False)
+        self.input_manager = ThreadedInputManager(board, self.user_input_queue, event_bus, debug=True)
         self.promotion_manager = PromotionManager(board)
         self.collision_manager = CollisionManager(event_bus)
 
@@ -149,6 +149,15 @@ class Game:
 
         # ═══════════ START THREADED INPUT MANAGER ═══════════
         self.input_manager.set_game_references(self.pieces, self.game_time_ms)
+        
+        # Configure network settings if in network mode
+        if self.network_manager:
+            network_status = self.network_manager.get_network_status()
+            self.input_manager.set_network_settings(
+                is_network_game=network_status['is_network_game'],
+                my_player_color=network_status['my_color']
+            )
+        
         self.input_manager.start_listening()
         print("Started threaded input manager")
 

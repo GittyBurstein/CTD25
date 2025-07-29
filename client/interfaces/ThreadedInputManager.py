@@ -20,6 +20,10 @@ class ThreadedInputManager(threading.Thread):
         self.chess_validator = ChessRulesValidator()
         self.debug = debug
         
+        # Network game settings
+        self.is_network_game = False
+        self.my_player_color = None  # 'white' or 'black' for network games
+        
         # Player selections
         self.selection = {
             'A': {'pos': [0, 0], 'selected': None, 'color': (255, 0, 0)},
@@ -51,6 +55,49 @@ class ThreadedInputManager(threading.Thread):
         """Set references to game pieces and time function."""
         self._pieces_ref = pieces_dict
         self._game_time_func = game_time_func
+    
+    def set_network_settings(self, is_network_game: bool, my_player_color: str = None):
+        """Set network game settings."""
+        self.is_network_game = is_network_game
+        self.my_player_color = my_player_color  # 'white' or 'black'
+        
+        if self.debug and is_network_game:
+            print(f"🌐 Network mode: Playing as {my_player_color}")
+            print(f"🎮 Network Game Status: {'ONLINE' if is_network_game else 'LOCAL'}")
+        elif self.debug:
+            print(f"🎮 Game Mode: LOCAL (both players on same computer)")
+    
+    def _can_player_control_piece(self, player: str, piece) -> bool:
+        """Check if a player can control a specific piece."""
+        if not self.is_network_game:
+            # In local games, both players can control any piece
+            return True
+        
+        # In network games, restrict based on color
+        if not hasattr(piece, 'color'):
+            return True  # Allow if piece has no color attribute
+        
+        # Map network player color to local player behavior
+        if self.my_player_color == 'white':
+            # If I'm the white player, I can only control white pieces
+            # This means I behave like player A (who controls white pieces)
+            player_can_control_white = True
+            player_can_control_black = False
+        elif self.my_player_color == 'black':
+            # If I'm the black player, I can only control black pieces  
+            # This means I behave like player B (who controls black pieces)
+            player_can_control_white = False
+            player_can_control_black = True
+        else:
+            return True  # Default allow if color not set
+            
+        # Check if the piece color matches what this player can control
+        if piece.color == "White":
+            return player_can_control_white
+        elif piece.color == "Black":
+            return player_can_control_black
+            
+        return True  # Default allow for pieces without clear color
         
     def start_listening(self):
         """Start the input listening thread."""
@@ -107,6 +154,34 @@ class ThreadedInputManager(threading.Thread):
         
     def _get_key_mappings(self) -> Dict:
         """Get the key mapping configuration."""
+        # In network mode, map keys based on player color
+        if self.is_network_game:
+            if self.my_player_color == 'white':
+                # White player uses arrows (like player A)
+                return {
+                    pygame.K_ESCAPE: ('SYSTEM', 'QUIT'),
+                    pygame.K_TAB: ('SYSTEM', 'SHOW_STATS'),
+                    pygame.K_UP: ('A', 'up'),
+                    pygame.K_DOWN: ('A', 'down'),
+                    pygame.K_LEFT: ('A', 'left'),
+                    pygame.K_RIGHT: ('A', 'right'),
+                    pygame.K_RETURN: ('A', 'select'),
+                    # Disable WASD for white player
+                }
+            elif self.my_player_color == 'black':
+                # Black player uses WASD (like player B)  
+                return {
+                    pygame.K_ESCAPE: ('SYSTEM', 'QUIT'),
+                    pygame.K_TAB: ('SYSTEM', 'SHOW_STATS'),
+                    pygame.K_w: ('B', 'up'),
+                    pygame.K_s: ('B', 'down'),
+                    pygame.K_a: ('B', 'left'),
+                    pygame.K_d: ('B', 'right'),
+                    pygame.K_SPACE: ('B', 'select'),
+                    # Disable arrows for black player
+                }
+        
+        # Default local game mapping
         return {
             pygame.K_ESCAPE: ('SYSTEM', 'QUIT'),
             pygame.K_TAB: ('SYSTEM', 'SHOW_STATS'),
@@ -142,6 +217,14 @@ class ThreadedInputManager(threading.Thread):
     
     def _handle_player_action(self, player: str, action: str):
         """Handle player actions (movement, selection, promotion)."""
+        # In network mode, restrict player actions based on their color
+        if self.is_network_game and self.my_player_color:
+            # Map network color to local player
+            if self.my_player_color == 'white' and player != 'A':
+                return  # White player can only control Player A (white pieces)
+            elif self.my_player_color == 'black' and player != 'B':
+                return  # Black player can only control Player B (black pieces)
+        
         if self.promotion_state[player]['active']:
             if self.debug:
                 print(f"PROMOTION DEBUG: Player {player} pressed {action}")
@@ -224,18 +307,46 @@ class ThreadedInputManager(threading.Thread):
 
     def _try_select_piece_at_position(self, player: str, pos: tuple):
         """Try to select a piece at the given position."""
-        player_color = "White" if player == "A" else "Black"
+        # Determine which pieces this player can select
+        if self.is_network_game:
+            # In network mode, restrict based on assigned player color
+            if self.my_player_color == 'white':
+                # White player can only select white pieces (like player A)
+                allowed_piece_color = "White" 
+            elif self.my_player_color == 'black':
+                # Black player can only select black pieces (like player B)
+                allowed_piece_color = "Black"
+            else:
+                # Fallback if color not set
+                allowed_piece_color = "White" if player == "A" else "Black"
+        else:
+            # In local mode, use traditional player mapping  
+            allowed_piece_color = "White" if player == "A" else "Black"
         
+        # Find piece at position with correct color
         for piece in self._pieces_ref.values():
             p_pos = tuple(piece.current_state.physics.current_cell)
-            if p_pos == pos and hasattr(piece, 'color') and piece.color == player_color:
+            
+            # Check position and color match
+            if p_pos == pos and hasattr(piece, 'color') and piece.color == allowed_piece_color:
                 self.selection[player]['selected'] = piece
                 if self.debug:
-                    print(f" Player {player} selected {piece.piece_id} at {pos}")
+                    if self.is_network_game:
+                        print(f" ✅ Player {player} (my_color={self.my_player_color}) selected {piece.piece_id} (piece_color={piece.color}) at {pos}")
+                    else:
+                        print(f" ✅ Player {player} selected {piece.piece_id} (piece_color={piece.color}) at {pos}")
                 return
         
+        # No valid piece found - show restriction message
         if self.debug:
-            print(f" No {player_color} piece at {pos}")
+            if self.is_network_game:
+                print(f" ❌ No {allowed_piece_color} piece at {pos} for player {player} (my_color={self.my_player_color})")
+            else:
+                print(f" ❌ No {allowed_piece_color} piece at {pos} for player {player}")
+                
+        # Always show restriction message in network mode for clarity
+        if self.is_network_game:
+            print(f" 🚫 Network restriction: You can only move {allowed_piece_color.lower()} pieces!")
 
     def _try_move_selected_piece(self, player: str, selected, pos: tuple):
         """Try to move the selected piece to the given position."""

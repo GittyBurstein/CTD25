@@ -39,6 +39,9 @@ class NetworkGameManager:
         
         # Subscribe to game events
         self.event_bus.subscribe(MOVE_DONE, self)
+        self.event_bus.subscribe(PIECE_CAPTURED, self)
+        self.event_bus.subscribe("PIECE_SELECTED", self)
+        self.event_bus.subscribe("PIECE_DESELECTED", self)
         
         logger.info("Network Game Manager initialized")
     
@@ -51,6 +54,11 @@ class NetworkGameManager:
         self.websocket_client.on_move_received = self._on_move_received
         self.websocket_client.on_player_joined = self._on_player_joined
         self.websocket_client.on_player_left = self._on_player_left
+        self.websocket_client.on_game_state_received = self._on_game_state_received
+        
+        # Setup periodic game state sync
+        self._sync_timer = 0
+        self._sync_interval = 200  # Sync every 200ms for better consistency
         self.websocket_client.on_error = self._on_error
     
     def start_network_game(self, mode: str = "create", room_id: str = None):
@@ -105,6 +113,157 @@ class NetworkGameManager:
                 logger.info(f"Sent move to server: {from_pos} to {to_pos} (piece: {piece})")
             else:
                 logger.warning("Invalid move data received from game")
+                
+        # Periodically sync full game state (less frequently)
+        current_time = self.game.game_time_ms()
+        if not hasattr(self, '_last_sync_time'):
+            self._last_sync_time = 0
+        if (current_time - self._last_sync_time > 1000 and  # Only sync every 1 second
+            hasattr(self, 'room_id') and self.room_id):  # And only if in a room
+            self._last_sync_time = current_time
+            self._send_full_game_state()
+    
+    def _send_full_game_state(self):
+        """Send complete game state to synchronize everything."""
+        try:
+            if not self.websocket_client.is_connected:
+                return
+                
+            # Don't send state if we're not in a room or waiting for players
+            if not hasattr(self, 'room_id') or not self.room_id:
+                return
+                
+            # Get all piece positions and states
+            pieces_state = {}
+            for piece_id, piece in self.game.pieces.items():
+                pieces_state[piece_id] = {
+                    'position': piece.current_state.physics.current_board_cell,
+                    'state': piece.current_state.current_state_name,
+                    'is_moving': piece.current_state.physics.is_currently_moving,
+                    'target_position': piece.current_state.physics.target_board_cell
+                }
+            
+            # Get player selections
+            selections = self.game.input_manager.get_all_selections()
+            
+            # Get game stats
+            game_stats = {}
+            if hasattr(self.game, 'score_manager'):
+                game_stats['scores'] = self.game.score_manager.get_score()
+            
+            if hasattr(self.game, 'move_logger'):
+                game_stats['moves_log'] = {
+                    'A': self.game.move_logger.get_recent_moves_for_player('A'),
+                    'B': self.game.move_logger.get_recent_moves_for_player('B')
+                }
+            
+            game_state = {
+                'type': 'game_state',
+                'state': {
+                    'pieces': pieces_state,
+                    'selections': {
+                        'A': {
+                            'pos': selections['A']['pos'],
+                            'selected_piece_id': selections['A']['selected'].piece_id if selections['A']['selected'] else None
+                        },
+                        'B': {
+                            'pos': selections['B']['pos'], 
+                            'selected_piece_id': selections['B']['selected'].piece_id if selections['B']['selected'] else None
+                        }
+                    },
+                    'game_stats': game_stats,
+                    'game_time': self.game.game_time_ms(),
+                    'player': self.my_color
+                }
+            }
+            
+            self.websocket_client.send_message(game_state)
+            
+        except Exception as e:
+            logger.error(f"Failed to send game state: {e}")
+    
+    def _on_game_state_received(self, state_data: dict):
+        """Apply received game state to synchronize everything."""
+        try:
+            # Check if data is wrapped in 'state' key (from server)
+            if 'pieces' not in state_data and 'state' in state_data:
+                state_data = state_data['state']
+                
+            player = state_data.get('player', 'unknown')
+            
+            # Don't apply our own state
+            if player == self.my_color:
+                return
+                
+            pieces_state = state_data.get('pieces', {})
+            selections_state = state_data.get('selections', {})
+            
+            print(f"🔄 Syncing full game state from {player}")
+            
+            # Update all piece positions and states
+            for piece_id, piece_data in pieces_state.items():
+                if piece_id in self.game.pieces:
+                    piece = self.game.pieces[piece_id]
+                    
+                    # Update position
+                    new_pos = tuple(piece_data['position'])
+                    old_pos = piece.current_state.physics.current_board_cell
+                    
+                    # Update the piece position
+                    piece.current_state.physics.current_board_cell = new_pos
+                    piece.current_state.physics.target_board_cell = tuple(piece_data['target_position'])
+                    piece.current_state.physics.is_currently_moving = piece_data['is_moving']
+                    
+                    # Update board state if position changed
+                    if old_pos != new_pos:
+                        # Clear old position from board
+                        if old_pos and old_pos in self.game.board.board_state:
+                            self.game.board.board_state[old_pos] = None
+                        
+                        # Set new position on board
+                        if new_pos:
+                            self.game.board.board_state[new_pos] = piece
+                    
+                    # Update visual state
+                    piece.current_state.state_start_time = self.game.game_time_ms()
+                    
+                    print(f"  🔧 Updated {piece_id}: {old_pos} -> {new_pos}")
+            
+            # Update selections (only show opponent's selection)
+            opponent_player = 'A' if self.my_color == 'black' else 'B'
+            if opponent_player in selections_state:
+                opponent_selection = selections_state[opponent_player]
+                
+                # Update opponent's cursor position
+                if hasattr(self.game.input_manager, '_player_positions'):
+                    self.game.input_manager._player_positions[opponent_player] = tuple(opponent_selection['pos'])
+                
+                # Update opponent's selected piece
+                selected_piece_id = opponent_selection.get('selected_piece_id')
+                if selected_piece_id and selected_piece_id in self.game.pieces:
+                    if hasattr(self.game.input_manager, '_player_selections'):
+                        self.game.input_manager._player_selections[opponent_player] = self.game.pieces[selected_piece_id]
+            
+            # Update game stats
+            game_stats = state_data.get('game_stats', {})
+            if game_stats:
+                # Update scores
+                if 'scores' in game_stats and hasattr(self.game, 'score_manager'):
+                    # Can't directly set scores, but we can log the sync
+                    print(f"  📊 Received scores: {game_stats['scores']}")
+                
+                # Update moves log 
+                if 'moves_log' in game_stats and hasattr(self.game, 'move_logger'):
+                    # Can't directly set moves log, but we can log the sync
+                    total_moves = len(game_stats['moves_log'].get('A', [])) + len(game_stats['moves_log'].get('B', []))
+                    print(f"  📝 Received moves log with {total_moves} moves")
+                
+            print(f"✅ Game state synchronized")
+            
+        except Exception as e:
+            logger.error(f"Failed to apply game state: {e}")
+            import traceback
+            traceback.print_exc()
     
     def update(self, event_type: str = None, data: dict = None):
         """Handle both EventBus events and regular updates."""
@@ -115,6 +274,16 @@ class NetworkGameManager:
         # Always update network state
         if self.is_network_game:
             self.websocket_client.process_incoming_messages()
+            
+            # Check if we need to sync state (only if there are other players)
+            current_time = self.game.game_time_ms()
+            if not hasattr(self, '_last_periodic_sync'):
+                self._last_periodic_sync = 0
+            # Only sync if enough time passed and we have room with other players
+            if (current_time - self._last_periodic_sync > 500 and  # Less frequent sync
+                hasattr(self, 'room_id') and self.room_id):
+                self._last_periodic_sync = current_time
+                self._send_full_game_state()
     
     def _convert_position_to_notation(self, pos: tuple) -> str:
         """Convert (row, col) position to chess notation (e.g., (0, 0) -> 'a8')."""
@@ -128,6 +297,25 @@ class NetworkGameManager:
         file = chr(ord('a') + col)
         rank = str(8 - row)
         return f"{file}{rank}"
+    
+    def _convert_notation_to_position(self, notation: str) -> tuple:
+        """Convert chess notation to (row, col) position (e.g., 'a8' -> (0, 0))."""
+        if not notation or len(notation) != 2:
+            return (0, 0)
+        
+        try:
+            file = notation[0].lower()
+            rank = notation[1]
+            
+            col = ord(file) - ord('a')
+            row = 8 - int(rank)
+            
+            if not (0 <= row < 8 and 0 <= col < 8):
+                return (0, 0)
+            
+            return (row, col)
+        except (ValueError, IndexError):
+            return (0, 0)
     
     def _convert_notation_to_position(self, notation: str) -> tuple:
         """Convert chess notation to (row, col) position (e.g., 'a8' -> (0, 0))."""
@@ -153,11 +341,21 @@ class NetworkGameManager:
         logger.info("🔌 Disconnected from chess server")
         print("🔌 Disconnected from chess server")
         self.is_network_game = False
+        self.room_id = None
+        self.my_color = None
     
     def _on_room_created(self, room_id: str, player_color: str):
         """Called when room is created."""
+        self.room_id = room_id
         self.my_color = player_color
         self.is_my_turn = (player_color == "white")
+        
+        # Update game's input manager with network settings
+        if hasattr(self.game, 'input_manager'):
+            self.game.input_manager.set_network_settings(
+                is_network_game=True,
+                my_player_color=player_color
+            )
         
         logger.info(f"🎮 Room created! Room ID: {room_id}, Playing as: {player_color}")
         print(f"🎮 Room created!")
@@ -167,7 +365,15 @@ class NetworkGameManager:
     
     def _on_room_joined(self, room_id: str, player_color: str):
         """Called when joined a room."""
+        self.room_id = room_id
         self.my_color = player_color
+        
+        # Update game's input manager with network settings
+        if hasattr(self.game, 'input_manager'):
+            self.game.input_manager.set_network_settings(
+                is_network_game=True,
+                my_player_color=player_color
+            )
         
         if player_color == "spectator":
             logger.info(f"👁️ Joined room {room_id} as spectator")
@@ -186,20 +392,68 @@ class NetworkGameManager:
         
         # Don't process our own moves
         if player == self.my_color:
+            print(f"🔄 Skipping own move: {from_notation} → {to_notation}")
             return
         
         from_pos = self._convert_notation_to_position(from_notation)
         to_pos = self._convert_notation_to_position(to_notation)
         
         logger.info(f"📥 Received opponent move: {from_notation} to {to_notation}")
-        print(f"📥 Opponent moved: {from_notation} → {to_notation}")
+        print(f"📥 Opponent moved: {from_notation} → {to_notation} (from {from_pos} to {to_pos})")
         
-        # Apply the move to our game
-        # Note: This would need integration with your game's move system
-        # For now, we'll just log it
-        
-        # Update turn
-        self.is_my_turn = (player != self.my_color)
+        # Apply the move to our game board
+        try:
+            # Debug: Check if we have access to pieces
+            if hasattr(self.game, 'pieces'):
+                pieces_dict = self.game.pieces
+                print(f"🔍 Found {len(pieces_dict)} pieces in game.pieces")
+            elif hasattr(self.game, 'board') and hasattr(self.game.board, 'pieces'):
+                pieces_dict = {piece.piece_id: piece for piece in self.game.board.pieces}
+                print(f"🔍 Found {len(pieces_dict)} pieces in game.board.pieces")
+            else:
+                print(f"❌ Could not find pieces in game object")
+                return
+            
+            # Find the piece at the source position
+            piece_to_move = None
+            print(f"🔍 Looking for piece at position {from_pos}...")
+            
+            for piece_id, piece in pieces_dict.items():
+                current_pos = piece.current_state.physics.current_board_cell
+                print(f"   Piece {piece_id} at {current_pos}")
+                if current_pos == from_pos:
+                    piece_to_move = piece
+                    print(f"✅ Found piece to move: {piece_id}")
+                    break
+            
+            if piece_to_move:
+                # Update the piece's physics position directly
+                old_pos = piece_to_move.current_state.physics.current_board_cell
+                piece_to_move.current_state.physics.current_board_cell = to_pos
+                piece_to_move.current_state.physics.target_board_cell = to_pos
+                piece_to_move.current_state.physics.is_currently_moving = False
+                
+                print(f"✅ Moved {piece_to_move.piece_id}: {old_pos} → {to_pos}")
+                logger.info(f"✅ Applied opponent move: {piece_to_move.piece_id} to {to_pos}")
+                
+                # Force the piece to refresh its visual state
+                piece_to_move.current_state.state_start_time = self.game.game_time_ms()
+                
+                print(f"🎨 Visual update forced for piece at {to_pos}")
+                
+            else:
+                print(f"⚠️ No piece found at {from_pos}")
+                logger.warning(f"⚠️ No piece found at {from_pos}")
+            
+            # Update turn
+            self.is_my_turn = (player != self.my_color)
+            print(f"🔄 Turn updated: is_my_turn = {self.is_my_turn}")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to apply opponent move: {e}")
+            print(f"❌ Error applying move: {e}")
+            import traceback
+            traceback.print_exc()
     
     def _on_player_joined(self, data: dict):
         """Called when a player joins the room."""

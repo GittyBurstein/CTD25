@@ -43,6 +43,7 @@ class ChessWebSocketClient:
         self.on_player_left: Optional[Callable[[Dict]]] = None
         self.on_chat_message: Optional[Callable[[Dict]]] = None
         self.on_error: Optional[Callable[[str]]] = None
+        self.on_game_state_received: Optional[Callable[[Dict]]] = None
         
         # Background thread for websocket communication
         self.websocket_thread: Optional[threading.Thread] = None
@@ -211,6 +212,12 @@ class ChessWebSocketClient:
             logger.error(f"Server error: {error_msg}")
             if self.on_error:
                 self.on_error(error_msg)
+                
+        elif message_type == 'game_state':
+            state_data = data.get('state', {})
+            logger.info(f"Game state received with {len(state_data.get('pieces', []))} pieces")
+            if self.on_game_state_received:
+                self.on_game_state_received(state_data)
                 
         elif message_type == 'pong':
             logger.debug("Received pong from server")

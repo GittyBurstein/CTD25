@@ -128,7 +128,9 @@ class ChessWebSocketServer:
             data = json.loads(message)
             message_type = data.get('type')
             
-            logger.info(f"Received message: {message_type} from {websocket.remote_address}")
+            # Only log important messages, not game_state spam
+            if message_type != 'game_state':
+                logger.info(f"Received message: {message_type} from {websocket.remote_address}")
             
             if message_type == 'create_room':
                 await self.handle_create_room(websocket, data)
@@ -138,6 +140,8 @@ class ChessWebSocketServer:
                 await self.handle_list_rooms(websocket)
             elif message_type == 'make_move':
                 await self.handle_make_move(websocket, data)
+            elif message_type == 'game_state':
+                await self.handle_game_state(websocket, data)
             elif message_type == 'chat_message':
                 await self.handle_chat_message(websocket, data)
             elif message_type == 'ping':
@@ -178,6 +182,7 @@ class ChessWebSocketServer:
         })
         
         logger.info(f"Room {room_id} created by {websocket.remote_address}")
+        logger.info(f"🎮 Room {room_id}: 1/2 players connected (waiting for opponent)")
     
     async def handle_join_room(self, websocket: websockets.WebSocketServerProtocol, data: dict):
         """Handle room join request."""
@@ -213,6 +218,10 @@ class ChessWebSocketServer:
             }, exclude=websocket)
             
             logger.info(f"Player joined room {room_id} as {player_color}")
+            logger.info(f"🎮 Room {room_id}: {len(room.players)}/2 players connected")
+            
+            if len(room.players) == 2:
+                logger.info(f"🎯 Room {room_id}: GAME READY! Both players connected")
             
         else:
             # Add as spectator
@@ -265,6 +274,14 @@ class ChessWebSocketServer:
             })
             return
         
+        # Check if game has enough players
+        if len(room.players) < 2:
+            await self.send_message(websocket, {
+                'type': 'error', 
+                'message': 'Waiting for opponent to join'
+            })
+            return
+        
         if room.game_state['current_player'] != player_color:
             await self.send_message(websocket, {
                 'type': 'error',
@@ -295,6 +312,26 @@ class ChessWebSocketServer:
         })
         
         logger.info(f"Move made in room {room_id}: {move_data['from']} to {move_data['to']}")
+    
+    async def handle_game_state(self, websocket: websockets.WebSocketServerProtocol, data: dict):
+        """Handle game state broadcast from client."""
+        room_id = self.client_rooms.get(websocket)
+        if not room_id or room_id not in self.rooms:
+            return  # Don't even respond with error to reduce noise
+        
+        room = self.rooms[room_id]
+        state_data = data.get('state', {})
+        
+        # Only broadcast if there are other players in the room
+        if len(room.players) < 2:
+            return  # No broadcast needed
+        
+        # Stop infinite message loops! 
+        # We receive the state but don't broadcast it back
+        # Clients already know how to update themselves
+        
+        # Just acknowledge receipt without broadcasting
+        logger.debug(f"Game state received in room {room_id} - NOT broadcasting to prevent infinite loop")
     
     async def handle_chat_message(self, websocket: websockets.WebSocketServerProtocol, data: dict):
         """Handle chat message from client."""
