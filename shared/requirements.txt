@@ -1,0 +1,5 @@
+opencv-python
+pygame
+numpy
+websockets>=11.0.3
+asyncio

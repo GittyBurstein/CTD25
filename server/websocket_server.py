@@ -1,0 +1,373 @@
+"""
+WebSocket Chess Server
+Manages multiplayer chess games and client connections.
+"""
+
+import asyncio
+import websockets
+import json
+import logging
+from datetime import datetime
+from typing import Dict, Set, Optional, List
+import uuid
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+
+class ChessGameRoom:
+    """Represents a chess game room with two players."""
+    
+    def __init__(self, room_id: str):
+        self.room_id = room_id
+        self.players: List[websockets.WebSocketServerProtocol] = []
+        self.spectators: Set[websockets.WebSocketServerProtocol] = set()
+        self.game_state = {
+            'board': self._initialize_board(),
+            'current_player': 'white',
+            'moves_history': [],
+            'game_status': 'waiting',  # waiting, active, finished
+            'winner': None
+        }
+        self.created_at = datetime.now()
+    
+    def _initialize_board(self):
+        """Initialize standard chess board position."""
+        return {
+            'a8': 'rb', 'b8': 'nb', 'c8': 'bb', 'd8': 'qb', 'e8': 'kb', 'f8': 'bb', 'g8': 'nb', 'h8': 'rb',
+            'a7': 'pb', 'b7': 'pb', 'c7': 'pb', 'd7': 'pb', 'e7': 'pb', 'f7': 'pb', 'g7': 'pb', 'h7': 'pb',
+            'a2': 'pw', 'b2': 'pw', 'c2': 'pw', 'd2': 'pw', 'e2': 'pw', 'f2': 'pw', 'g2': 'pw', 'h2': 'pw',
+            'a1': 'rw', 'b1': 'nw', 'c1': 'bw', 'd1': 'qw', 'e1': 'kw', 'f1': 'bw', 'g1': 'nw', 'h1': 'rw'
+        }
+    
+    def add_player(self, websocket: websockets.WebSocketServerProtocol) -> bool:
+        """Add a player to the room. Returns True if successful, False if room is full."""
+        if len(self.players) < 2:
+            self.players.append(websocket)
+            if len(self.players) == 2:
+                self.game_state['game_status'] = 'active'
+            return True
+        return False
+    
+    def remove_player(self, websocket: websockets.WebSocketServerProtocol):
+        """Remove a player from the room."""
+        if websocket in self.players:
+            self.players.remove(websocket)
+            if len(self.players) < 2:
+                self.game_state['game_status'] = 'waiting'
+    
+    def add_spectator(self, websocket: websockets.WebSocketServerProtocol):
+        """Add a spectator to the room."""
+        self.spectators.add(websocket)
+    
+    def remove_spectator(self, websocket: websockets.WebSocketServerProtocol):
+        """Remove a spectator from the room."""
+        self.spectators.discard(websocket)
+    
+    def get_player_color(self, websocket: websockets.WebSocketServerProtocol) -> Optional[str]:
+        """Get the color assigned to a player."""
+        if websocket in self.players:
+            return 'white' if self.players.index(websocket) == 0 else 'black'
+        return None
+    
+    async def broadcast_to_room(self, message: dict, exclude: Optional[websockets.WebSocketServerProtocol] = None):
+        """Broadcast a message to all players and spectators in the room."""
+        all_clients = set(self.players) | self.spectators
+        if exclude:
+            all_clients.discard(exclude)
+        
+        message_str = json.dumps(message)
+        disconnected = []
+        
+        for client in all_clients:
+            try:
+                await client.send(message_str)
+            except websockets.exceptions.ConnectionClosed:
+                disconnected.append(client)
+        
+        # Clean up disconnected clients
+        for client in disconnected:
+            self.remove_player(client)
+            self.remove_spectator(client)
+
+
+class ChessWebSocketServer:
+    """Main WebSocket server for chess games."""
+    
+    def __init__(self, host: str = "localhost", port: int = 8765):
+        self.host = host
+        self.port = port
+        self.rooms: Dict[str, ChessGameRoom] = {}
+        self.client_rooms: Dict[websockets.WebSocketServerProtocol, str] = {}
+        logger.info(f"Chess WebSocket Server initialized on {host}:{port}")
+    
+    async def register_client(self, websocket, path=None):
+        """Handle client registration and message routing."""
+        try:
+            logger.info(f"Client connected from {websocket.remote_address}")
+            await self.send_message(websocket, {
+                'type': 'connection_established',
+                'message': 'Connected to Chess Server',
+                'server_time': datetime.now().isoformat()
+            })
+            
+            async for message in websocket:
+                await self.handle_message(websocket, message)
+                
+        except websockets.exceptions.ConnectionClosed:
+            logger.info(f"Client {websocket.remote_address} disconnected")
+        except Exception as e:
+            logger.error(f"Error handling client {websocket.remote_address}: {e}")
+        finally:
+            await self.cleanup_client(websocket)
+    
+    async def handle_message(self, websocket: websockets.WebSocketServerProtocol, message: str):
+        """Handle incoming message from client."""
+        try:
+            data = json.loads(message)
+            message_type = data.get('type')
+            
+            logger.info(f"Received message: {message_type} from {websocket.remote_address}")
+            
+            if message_type == 'create_room':
+                await self.handle_create_room(websocket, data)
+            elif message_type == 'join_room':
+                await self.handle_join_room(websocket, data)
+            elif message_type == 'list_rooms':
+                await self.handle_list_rooms(websocket)
+            elif message_type == 'make_move':
+                await self.handle_make_move(websocket, data)
+            elif message_type == 'chat_message':
+                await self.handle_chat_message(websocket, data)
+            elif message_type == 'ping':
+                await self.send_message(websocket, {'type': 'pong', 'timestamp': datetime.now().isoformat()})
+            else:
+                await self.send_message(websocket, {
+                    'type': 'error',
+                    'message': f'Unknown message type: {message_type}'
+                })
+                
+        except json.JSONDecodeError:
+            await self.send_message(websocket, {
+                'type': 'error',
+                'message': 'Invalid JSON format'
+            })
+        except Exception as e:
+            logger.error(f"Error handling message: {e}")
+            await self.send_message(websocket, {
+                'type': 'error',
+                'message': 'Internal server error'
+            })
+    
+    async def handle_create_room(self, websocket: websockets.WebSocketServerProtocol, data: dict):
+        """Handle room creation request."""
+        room_id = str(uuid.uuid4())[:8]  # Short unique ID
+        room = ChessGameRoom(room_id)
+        
+        # Add creator as first player
+        room.add_player(websocket)
+        self.rooms[room_id] = room
+        self.client_rooms[websocket] = room_id
+        
+        await self.send_message(websocket, {
+            'type': 'room_created',
+            'room_id': room_id,
+            'player_color': 'white',
+            'game_state': room.game_state
+        })
+        
+        logger.info(f"Room {room_id} created by {websocket.remote_address}")
+    
+    async def handle_join_room(self, websocket: websockets.WebSocketServerProtocol, data: dict):
+        """Handle room join request."""
+        room_id = data.get('room_id')
+        
+        if room_id not in self.rooms:
+            await self.send_message(websocket, {
+                'type': 'error',
+                'message': 'Room not found'
+            })
+            return
+        
+        room = self.rooms[room_id]
+        
+        # Try to add as player first
+        if room.add_player(websocket):
+            self.client_rooms[websocket] = room_id
+            player_color = room.get_player_color(websocket)
+            
+            await self.send_message(websocket, {
+                'type': 'room_joined',
+                'room_id': room_id,
+                'player_color': player_color,
+                'game_state': room.game_state
+            })
+            
+            # Notify other players
+            await room.broadcast_to_room({
+                'type': 'player_joined',
+                'room_id': room_id,
+                'players_count': len(room.players),
+                'game_state': room.game_state
+            }, exclude=websocket)
+            
+            logger.info(f"Player joined room {room_id} as {player_color}")
+            
+        else:
+            # Add as spectator
+            room.add_spectator(websocket)
+            self.client_rooms[websocket] = room_id
+            
+            await self.send_message(websocket, {
+                'type': 'room_joined',
+                'room_id': room_id,
+                'player_color': 'spectator',
+                'game_state': room.game_state
+            })
+            
+            logger.info(f"Spectator joined room {room_id}")
+    
+    async def handle_list_rooms(self, websocket: websockets.WebSocketServerProtocol):
+        """Handle request for available rooms."""
+        rooms_info = []
+        for room_id, room in self.rooms.items():
+            rooms_info.append({
+                'room_id': room_id,
+                'players_count': len(room.players),
+                'spectators_count': len(room.spectators),
+                'game_status': room.game_state['game_status'],
+                'created_at': room.created_at.isoformat()
+            })
+        
+        await self.send_message(websocket, {
+            'type': 'rooms_list',
+            'rooms': rooms_info
+        })
+    
+    async def handle_make_move(self, websocket: websockets.WebSocketServerProtocol, data: dict):
+        """Handle chess move from client."""
+        room_id = self.client_rooms.get(websocket)
+        if not room_id or room_id not in self.rooms:
+            await self.send_message(websocket, {
+                'type': 'error',
+                'message': 'Not in a room'
+            })
+            return
+        
+        room = self.rooms[room_id]
+        player_color = room.get_player_color(websocket)
+        
+        if not player_color:
+            await self.send_message(websocket, {
+                'type': 'error',
+                'message': 'Only players can make moves'
+            })
+            return
+        
+        if room.game_state['current_player'] != player_color:
+            await self.send_message(websocket, {
+                'type': 'error',
+                'message': 'Not your turn'
+            })
+            return
+        
+        # Extract move data
+        move_data = {
+            'from': data.get('from'),
+            'to': data.get('to'),
+            'piece': data.get('piece'),
+            'timestamp': datetime.now().isoformat(),
+            'player': player_color
+        }
+        
+        # Add move to history
+        room.game_state['moves_history'].append(move_data)
+        
+        # Switch turns
+        room.game_state['current_player'] = 'black' if player_color == 'white' else 'white'
+        
+        # Broadcast move to all clients in room
+        await room.broadcast_to_room({
+            'type': 'move_made',
+            'move': move_data,
+            'game_state': room.game_state
+        })
+        
+        logger.info(f"Move made in room {room_id}: {move_data['from']} to {move_data['to']}")
+    
+    async def handle_chat_message(self, websocket: websockets.WebSocketServerProtocol, data: dict):
+        """Handle chat message from client."""
+        room_id = self.client_rooms.get(websocket)
+        if not room_id or room_id not in self.rooms:
+            return
+        
+        room = self.rooms[room_id]
+        player_color = room.get_player_color(websocket) or 'spectator'
+        
+        chat_message = {
+            'type': 'chat_message',
+            'player': player_color,
+            'message': data.get('message', ''),
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        await room.broadcast_to_room(chat_message)
+    
+    async def cleanup_client(self, websocket: websockets.WebSocketServerProtocol):
+        """Clean up when client disconnects."""
+        room_id = self.client_rooms.get(websocket)
+        if room_id and room_id in self.rooms:
+            room = self.rooms[room_id]
+            room.remove_player(websocket)
+            room.remove_spectator(websocket)
+            
+            # Remove empty rooms
+            if len(room.players) == 0 and len(room.spectators) == 0:
+                del self.rooms[room_id]
+                logger.info(f"Removed empty room {room_id}")
+            else:
+                # Notify remaining clients
+                await room.broadcast_to_room({
+                    'type': 'player_left',
+                    'room_id': room_id,
+                    'players_count': len(room.players),
+                    'game_state': room.game_state
+                })
+        
+        if websocket in self.client_rooms:
+            del self.client_rooms[websocket]
+    
+    async def send_message(self, websocket: websockets.WebSocketServerProtocol, message: dict):
+        """Send a message to a specific client."""
+        try:
+            await websocket.send(json.dumps(message))
+        except websockets.exceptions.ConnectionClosed:
+            pass
+    
+    async def start_server(self):
+        """Start the WebSocket server."""
+        logger.info(f"Starting Chess WebSocket Server on {self.host}:{self.port}")
+        
+        async with websockets.serve(self.register_client, self.host, self.port):
+            logger.info("Chess WebSocket Server is running...")
+            logger.info(f"Connect clients to: ws://{self.host}:{self.port}")
+            await asyncio.Future()  # Run forever
+
+
+async def main():
+    """Main entry point for the WebSocket server."""
+    server = ChessWebSocketServer()
+    
+    try:
+        await server.start_server()
+    except KeyboardInterrupt:
+        logger.info("Server shutdown requested")
+    except Exception as e:
+        logger.error(f"Server error: {e}")
+    finally:
+        logger.info("Chess WebSocket Server stopped")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
