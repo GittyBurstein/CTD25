@@ -145,6 +145,10 @@ class ChessWebSocketClient:
                 while not self.outgoing_messages.empty():
                     try:
                         message = self.outgoing_messages.get_nowait()
+                        # Include current timestamp in the message
+                        if isinstance(message, dict):
+                            message['timestamp'] = datetime.now().timestamp()
+                        
                         await self.websocket.send(json.dumps(message))
                         logger.debug(f"Sent message: {message.get('type', 'unknown')}")
                     except queue.Empty:
@@ -187,10 +191,16 @@ class ChessWebSocketClient:
                 self.on_room_joined(self.room_id, self.player_color)
                 
         elif message_type == 'move_made':
-            move_data = data.get('move', {})
-            logger.info(f"Move received: {move_data.get('from')} to {move_data.get('to')}")
-            if self.on_move_received:
-                self.on_move_received(move_data)
+            piece_info = data.get('piece', {})
+            if piece_info:
+                logger.info(f"Network move received:")
+                logger.info(f"  Piece: {piece_info.get('piece')}")
+                logger.info(f"  From: {piece_info.get('from')} → {piece_info.get('to')}")
+                logger.info(f"  State: {piece_info.get('state')}")
+                logger.info(f"  Speed: {piece_info.get('speed')}")
+                
+                if self.on_move_received:
+                    self.on_move_received(piece_info)
                 
         elif message_type == 'player_joined':
             logger.info(f"Player joined room {data.get('room_id')}")
@@ -249,13 +259,34 @@ class ChessWebSocketClient:
         """Request list of available rooms."""
         return self.send_message({'type': 'list_rooms'})
     
-    def make_move(self, from_pos: str, to_pos: str, piece: str) -> bool:
-        """Send a chess move to the server."""
+    def make_move(self, from_pos: str, to_pos: str, piece: str, state_info: dict = None) -> bool:
+        """Send a chess move to the server with complete state info."""
+        if not state_info:
+            state_info = {
+                'name': 'moving',
+                'speed': 1.0,
+                'is_rest': False,
+                'rest_duration': 0,
+                'activation_time': 0,
+                'transitions': {}
+            }
+            
         return self.send_message({
             'type': 'make_move',
             'from': from_pos,
             'to': to_pos,
-            'piece': piece
+            'piece': piece,
+            'state_info': state_info
+        })
+        
+    def notify_piece_captured(self, piece_id: str, position: str) -> bool:
+        """Notify server about a captured piece."""
+        return self.send_message({
+            'type': 'piece_captured',
+            'piece': {
+                'id': piece_id,
+                'position': position
+            }
         })
     
     def send_chat_message(self, message: str) -> bool:

@@ -107,7 +107,7 @@ class NetworkGameManager:
         if not self.is_network_game:
             return
         
-        # In real-time mode (Kung Fu Chess), we send all moves immediately
+        # In real-time mode (Kung Fu Chess), we send all moves and captures immediately
         if event_type == MOVE_DONE:
             # Send move to other players
             command = data.get('command')
@@ -116,10 +116,52 @@ class NetworkGameManager:
                 to_pos = self._convert_position_to_notation(command.params[1])
                 piece = command.piece_id[:2] if command.piece_id else ''
                 
-                self.websocket_client.make_move(from_pos, to_pos, piece)
-                logger.info(f"Sent move to server: {from_pos} to {to_pos} (piece: {piece})")
+                # Get piece and its details
+                piece_obj = next((p for p in self.game.pieces.values() if p.piece_id.startswith(piece)), None)
+                if piece_obj:
+                    # Get complete state info
+                    current_state = piece_obj.current_state
+                    state_info = {
+                        'name': current_state.current_state_name,
+                        'is_rest': current_state.requires_rest_period,
+                        'rest_duration': current_state.rest_period_duration_ms,
+                        'activation_time': current_state.state_activation_timestamp,
+                        'speed': current_state.physics.movement_speed,
+                        'rest_remaining': max(0, current_state.rest_period_duration_ms - (self.game.game_time_ms() - current_state.state_activation_timestamp)),
+                        'network_time': self.game.game_time_ms(),
+                        'transitions': {}
+                    }
+                    
+                        # Send move command with complete state info
+                    self.websocket_client.make_move(
+                        from_pos=from_pos,
+                        to_pos=to_pos,
+                        piece=piece,
+                        state_info=state_info
+                    )
+                    
+                    # Log detailed move info
+                    logger.info("Sending network move:")
+                    logger.info(f"  Piece: {piece}")
+                    logger.info(f"  From: {from_pos} → {to_pos}")
+                    logger.info(f"  State: {state_info['name']}")
+                    logger.info(f"  Speed: {state_info['speed']}")
+                    logger.info(f"  Rest: {state_info['is_rest']}")
+                    logger.info(f"  Rest Duration: {state_info['rest_duration']}ms")
+                    logger.info(f"  Transitions: {state_info['transitions']}")
+                else:
+                    logger.warning(f"Could not find piece {piece} to send move")
             else:
                 logger.warning("Invalid move data received from game")
+                
+        elif event_type == PIECE_CAPTURED:
+            # Send capture event
+            captured_piece = data.get('piece')
+            if captured_piece:
+                piece_id = captured_piece.piece_id
+                position = self._convert_position_to_notation(captured_piece.current_state.physics.current_board_cell)
+                self.websocket_client.notify_piece_captured(piece_id, position)
+                logger.info(f"Sent capture notification: {piece_id} at {position}")
                 
         # Periodically sync full game state (less frequently)
         current_time = self.game.game_time_ms()
@@ -149,12 +191,36 @@ class NetworkGameManager:
                 curr_pos = piece.current_state.physics.current_board_cell
                 target_pos = piece.current_state.physics.target_board_cell
                 
+                # Get command information for state sync
+                command_type = 'move'
+                command_params = []
+                if piece.current_state.current_command:
+                    command_type = piece.current_state.current_command.type
+                    command_params = piece.current_state.current_command.params
+                    
+                # Get state machine info
+                current_state = piece.current_state
+                current_state_name = current_state.current_state_name
+                transitions = {}  # לא נשתמש במעברי מצב
+                last_transition_time = current_state.state_activation_timestamp
+
                 pieces_state[piece_id] = {
                     'position': curr_pos,
-                    'state': piece.current_state.current_state_name,
+                    'state': current_state_name,
+                    'state_info': {
+                        'name': current_state_name,
+                        'transitions': transitions,
+                        'last_transition_time': last_transition_time,
+                        'activation_time': current_state.state_activation_timestamp,
+                        'is_rest': current_state.requires_rest_period,
+                        'rest_duration': current_state.rest_period_duration_ms,
+                        'speed': current_state.physics.movement_speed
+                    },
                     'is_moving': piece.current_state.physics.is_currently_moving,
                     'target_position': target_pos,
-                    'last_update': self.game.game_time_ms()
+                    'last_update': self.game.game_time_ms(),
+                    'command_type': command_type,
+                    'command_params': command_params
                 }
                 logger.debug(f"Piece {piece_id} state: pos={curr_pos}, target={target_pos}, moving={piece.current_state.physics.is_currently_moving}")
             
@@ -185,6 +251,15 @@ class NetworkGameManager:
                     'B': self.game.move_logger.get_recent_moves_for_player('B')
                 }
             
+            # Check each piece's state before sending
+            for piece_id, piece_data in pieces_state.items():
+                piece = self.game.pieces.get(piece_id)
+                if piece and piece.current_state.requires_rest_period:
+                    current_time = self.game.game_time_ms()
+                    time_since_activation = current_time - piece.current_state.state_activation_timestamp
+                    piece_data['is_resting'] = time_since_activation < piece.current_state.rest_period_duration_ms
+                    piece_data['rest_remaining'] = max(0, piece.current_state.rest_period_duration_ms - time_since_activation)
+            
             # Create complete state with timing info
             game_state = {
                 'type': 'game_state',
@@ -210,44 +285,120 @@ class NetworkGameManager:
         except Exception as e:
             logger.error(f"Failed to send game state: {e}")
     
-    def _on_move_received(self, move_data: dict, piece_state: dict = None):
+    def _on_move_received(self, piece_info: dict):
         """Handle move received from other player."""
         try:
-            if not self.is_network_game or not move_data:
+            if not self.is_network_game:
+                return
+
+            # לוג מפורט של המידע שהתקבל
+            logger.info(f"Received piece_info: {piece_info}")
+                
+            # Get move info
+            from_pos = self._convert_notation_to_position(piece_info.get('from', ''))
+            to_pos = self._convert_notation_to_position(piece_info.get('to', ''))
+            piece_id = piece_info.get('piece', '')
+            
+            # Get complete state info
+            state_info = piece_info.get('state_info')
+            if not state_info:
+                # אם אין מידע על מצב, נחפש אותו מהחייל עצמו
+                piece = next((p for p in self.game.pieces.values() if p.piece_id.startswith(piece_id)), None)
+                if piece:
+                    current_state = piece.current_state
+                    state_info = {
+                        'name': current_state.current_state_name,
+                        'is_rest': current_state.requires_rest_period,
+                        'rest_duration': current_state.rest_period_duration_ms,
+                        'activation_time': current_state.state_activation_timestamp,
+                        'speed': current_state.physics.movement_speed,
+                        'network_time': piece_info.get('network_time', self.game.game_time_ms())
+                    }
+                else:
+                    state_info = {
+                        'name': 'idle',
+                        'is_rest': False,
+                        'rest_duration': 0,
+                        'activation_time': self.game.game_time_ms(),
+                        'speed': 1.0,
+                        'network_time': self.game.game_time_ms()
+                    }
+            
+            logger.info(f"Processing network move with state:")
+            logger.info(f"  Piece: {piece_id}")
+            logger.info(f"  From: {from_pos} → {to_pos}")
+            logger.info(f"  State: {state_info['name']}")
+            logger.info(f"  Rest: {state_info['is_rest']}")
+            logger.info(f"  Rest Duration: {state_info['rest_duration']}ms")
+            
+            # Find matching piece
+            piece = next((p for p in self.game.pieces.values() if p.piece_id.startswith(piece_id)), None)
+            if not piece:
+                logger.warning(f"No piece found matching {piece_id}")
                 return
                 
-            # Convert network position notation to game coordinates
-            from_pos = self._convert_notation_to_position(move_data.get('from', ''))
-            to_pos = self._convert_notation_to_position(move_data.get('to', ''))
-            piece_id = move_data.get('piece', '')
+            # Check if piece is in rest period before doing anything
+            if piece.current_state.requires_rest_period:
+                current_time = self.game.game_time_ms()
+                time_since_activation = current_time - piece.current_state.state_activation_timestamp
+                if time_since_activation < piece.current_state.rest_period_duration_ms:
+                    logger.warning(f"⚠️ Piece {piece_id} is in rest period, cannot move!")
+                    print(f"⚠️ Cannot move piece {piece_id} - in rest period for {(piece.current_state.rest_period_duration_ms - time_since_activation)/1000:.1f}s more")
+                    return
+                
+            # Create command and update state together
+            from shared.interfaces.Command import Command
+            current_time = self.game.game_time_ms()
             
-            logger.info(f"📥 Processing opponent's move: {piece_id} {from_pos} → {to_pos}")
+            # Create a copy of the current state for comparison
+            original_state = piece.current_state.create_independent_copy_of_state()
             
-            # Find the piece that needs to be moved
-            for pid, piece in self.game.pieces.items():
-                if pid.startswith(piece_id) and self._get_piece_pos(piece) == from_pos:
-                    from Command import Command
-                    current_time = self.game.game_time_ms()
-                    move_cmd = Command(current_time, pid, "move", [from_pos, to_pos])
-                    
-                    # Apply the move
-                    new_state = piece.current_state.get_state_after_command(move_cmd, current_time)
-                    if new_state:
-                        # Log the state change
-                        logger.info(f"Network move for {pid}:")
-                        logger.info(f"  From: {from_pos} -> {to_pos}")
-                        logger.info(f"  Old state: {piece.current_state.current_state_name}")
-                        logger.info(f"  New state: {new_state.current_state_name}")
-                        
-                        piece.current_state = new_state
-                        
-                        # Update piece state if provided
-                        if piece_state and pid in piece_state:
-                            self._apply_piece_state(piece, piece_state[pid])
-                            logger.info(f"  Applied additional state: {piece_state[pid]}")
-                    else:
-                        logger.warning(f"Failed to apply move for {pid}: {from_pos} -> {to_pos}")
-                    break
+            # Create move command
+            move_cmd = Command(current_time, piece.piece_id, "move", [from_pos, to_pos])
+            
+            # Get the next state from the state machine
+            next_state = piece.current_state.get_state_after_command(move_cmd, current_time)
+            if not next_state:
+                next_state = piece.current_state.create_independent_copy_of_state()
+            
+            # Update the state properties on the new state
+            next_state.current_state_name = state_info['name']
+            next_state.requires_rest_period = state_info['is_rest']
+            next_state.rest_period_duration_ms = state_info['rest_duration']
+            next_state.state_activation_timestamp = state_info['activation_time']
+            next_state.physics.movement_speed = state_info['speed']
+            next_state.physics.current_board_cell = to_pos
+            next_state.physics.target_board_cell = to_pos
+            next_state.physics.is_currently_moving = True
+            
+            # Apply the new state to the piece
+            piece.current_state = next_state
+            
+            # Let the state machine process the command and transitions
+            new_state = piece.current_state.get_state_after_command(move_cmd, current_time)
+            if new_state and new_state is not piece.current_state:
+                # Keep the state properties we set
+                new_state.current_state_name = state_info['name']
+                new_state.requires_rest_period = state_info['is_rest']
+                new_state.rest_period_duration_ms = state_info['rest_duration']
+                new_state.state_activation_timestamp = state_info['activation_time']
+                piece.current_state = new_state
+                
+            # Update transitions
+            if 'transitions' in state_info:
+                for event, target_state in state_info['transitions'].items():
+                    target = piece.current_state.create_independent_copy_of_state()
+                    target.current_state_name = target_state
+                    piece.current_state.configure_state_transition_rule(event, target)
+            
+            logger.info(f"Updated piece {piece.piece_id} state:")
+            logger.info(f"  From: {original_state.current_state_name} → {piece.current_state.current_state_name}")
+            logger.info(f"  Rest Required: {piece.current_state.requires_rest_period}")
+            logger.info(f"  Rest Duration: {piece.current_state.rest_period_duration_ms}ms")
+            logger.info(f"  Position: {from_pos} → {to_pos}")
+                
+        except Exception as e:
+            logger.error(f"Error handling network move: {e}", exc_info=True)
             
         except Exception as e:
             logger.error(f"Error handling network move: {e}")
@@ -284,7 +435,69 @@ class NetworkGameManager:
             logger.error(f"Failed to draw room info: {e}")
         
     def _apply_piece_state(self, piece, state_data: dict, current_time: int = None):
-        """Apply received piece state."""
+        """Apply received piece state to a piece using the state machine."""
+        if not current_time:
+            current_time = self.game.game_time_ms()
+
+        # Store original state for logging
+        original_state = piece.current_state.current_state_name
+
+        # Get complete state information from data
+        state_info = state_data.get('state_info', {})
+        if not state_info and 'state' in state_data:  # Backwards compatibility
+            state_info = {
+                'name': state_data['state'],
+                'activation_time': state_data.get('state_activation_time', current_time),
+                'is_rest': False,
+                'rest_duration': 0,
+                'transitions': {}
+            }
+
+        # Check if piece is in rest period
+        if state_data.get('is_resting', False):
+            piece.current_state.requires_rest_period = True
+            if 'rest_remaining' in state_data:
+                network_time = state_data.get('network_time', self.game.game_time_ms())
+                piece.current_state.state_activation_timestamp = network_time - (piece.current_state.rest_period_duration_ms - state_data['rest_remaining'])
+            logger.info(f"Piece {piece.piece_id} is resting, keeping rest state")
+            return
+
+        # Get command information for state machine
+        cmd_type = state_data.get('command_type', 'move')
+        cmd_params = state_data.get('command_params', [])
+            
+        # Create command with state timing
+        from shared.interfaces.Command import Command
+        state_cmd = Command(state_info['activation_time'], piece.piece_id, cmd_type, cmd_params)
+        
+        # Use state machine to transition
+        next_state = piece.current_state.get_state_after_command(state_cmd, current_time)
+        if next_state:
+            next_state.current_state_name = state_info['name']
+            next_state.state_activation_timestamp = state_info['activation_time']
+            if 'is_rest' in state_info:
+                next_state.requires_rest_period = state_info['is_rest']
+                next_state.rest_period_duration_ms = state_info.get('rest_duration', 0)
+        
+        if next_state is not piece.current_state:
+            # Apply the new state
+            piece.current_state = next_state
+            logger.info(f"Updated piece {piece.piece_id} through state machine:")
+            logger.info(f"  New State: {next_state.current_state_name}")
+            logger.info(f"  Rest Required: {next_state.requires_rest_period}")
+            logger.info(f"  Rest Duration: {next_state.rest_period_duration_ms}ms")
+            logger.info(f"  Activation Time: {next_state.state_activation_timestamp}")
+            
+        # Also update the state according to normal state machine rules
+        updated_state = next_state.update_state_and_check_for_transitions(current_time)
+        if updated_state is not next_state:
+            piece.current_state = updated_state
+            logger.info(f"State machine auto-transition for {piece.piece_id}:")
+            logger.info(f"  Final State: {updated_state.current_state_name}")
+            
+        # Handle capture state
+        if piece.current_state.current_state_name == 'captured':
+            self.event_bus.publish(PIECE_CAPTURED, {"piece": piece})
         if not state_data:
             return
             
@@ -333,23 +546,43 @@ class NetworkGameManager:
                 
             pieces_state = state_data.get('pieces', {})
             selections_state = state_data.get('selections', {})
+            current_time = self.game.game_time_ms()
             
-            print(f"🔄 Syncing full game state from {player}")
+            logger.info(f"🔄 Syncing full game state from {player}")
             
             # Update all piece positions and states
             for piece_id, piece_data in pieces_state.items():
                 if piece_id in self.game.pieces:
                     piece = self.game.pieces[piece_id]
                     
-                    # Update position
-                    new_pos = tuple(piece_data['position'])
+                    # Get current state before update
                     old_pos = piece.current_state.physics.current_board_cell
+                    old_state = piece.current_state.current_state_name
                     
-                    # Log before update
+                    # Update position and state
+                    new_pos = tuple(piece_data['position'])
+                    
+                # Update rest state first if needed
+                state_info = piece_data.get('state_info', {})
+                if state_info.get('is_rest', False):
+                    piece.current_state.requires_rest_period = True
+                    piece.current_state.rest_period_duration_ms = state_info.get('rest_duration', 0)
+                    if 'rest_remaining' in piece_data:
+                        network_time = piece_data.get('network_time', self.game.game_time_ms())
+                        piece.current_state.state_activation_timestamp = network_time - (piece.current_state.rest_period_duration_ms - piece_data['rest_remaining'])
+                    logger.info(f"Updated rest state for {piece_id}")
+                
+                # Apply complete state with timing
+                self._apply_piece_state(piece, piece_data, current_time)
+                
+                # Update target position if moving
+                if piece_data.get('is_moving', False):
+                    target_pos = piece_data.get('target_position')
+                    if target_pos:
+                        piece.current_state.physics.target_board_cell = tuple(target_pos)                    # Log state changes
                     self._log_piece_update(piece_id, old_pos, new_pos, piece_data)
-                    
-                    # Update the piece position
-                    piece.current_state.physics.current_board_cell = new_pos
+                    if old_state != piece.current_state.current_state_name:
+                        logger.info(f"State changed: {old_state} → {piece.current_state.current_state_name}")
                     piece.current_state.physics.target_board_cell = tuple(piece_data['target_position'])
                     piece.current_state.physics.is_currently_moving = piece_data['is_moving']
                     
@@ -364,7 +597,13 @@ class NetworkGameManager:
                             self.game.board.board_state[new_pos] = piece
                     
                     # Update visual state
-                    piece.current_state.state_start_time = self.game.game_time_ms()
+                    network_time = state_data.get('network_time', self.game.game_time_ms())
+                    piece.current_state._state_start_time = network_time
+                    # Update REST state
+                    if state_info.get('is_rest', False):
+                        piece.current_state.requires_rest_period = True
+                        piece.current_state.rest_period_duration_ms = state_info.get('rest_duration', 0)
+                        piece.current_state.state_activation_timestamp = state_info.get('activation_time', network_time)
                     
                     print(f"  🔧 Updated {piece_id}: {old_pos} -> {new_pos}")
             
@@ -563,6 +802,15 @@ class NetworkGameManager:
                 if current_pos == from_pos:
                     piece_to_move = piece
                     print(f"✅ Found piece to move: {piece_id}")
+                    
+                    # Check piece state before moving
+                    if piece.current_state.requires_rest_period:
+                        current_time = self.game.game_time_ms()
+                        time_since_activation = current_time - piece.current_state.state_activation_timestamp
+                        if time_since_activation < piece.current_state.rest_period_duration_ms:
+                            logger.warning(f"⚠️ Piece {piece_id} is in rest period, cannot move!")
+                            print(f"⚠️ Cannot move piece {piece_id} - in rest period for {(piece.current_state.rest_period_duration_ms - time_since_activation)/1000:.1f}s more")
+                            return
                     break
             
             if piece_to_move:
@@ -576,7 +824,7 @@ class NetworkGameManager:
                 logger.info(f"✅ Applied opponent move: {piece_to_move.piece_id} to {to_pos}")
                 
                 # Force the piece to refresh its visual state
-                piece_to_move.current_state.state_start_time = self.game.game_time_ms()
+                piece_to_move.current_state._state_start_time = self.game.game_time_ms()
                 
                 print(f"🎨 Visual update forced for piece at {to_pos}")
                 

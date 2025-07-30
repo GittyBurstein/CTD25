@@ -98,19 +98,25 @@ class ChessGameRoom:
         if exclude:
             all_clients.discard(exclude)
         
+        # Add server timestamp to message
+        message['server_timestamp'] = datetime.now().timestamp()
         message_str = json.dumps(message)
         disconnected = []
         
         for client in all_clients:
             try:
                 await client.send(message_str)
+                if 'state' in message:  # Log state syncs for debugging
+                    logger.debug(f"State sync sent to {client.remote_address}")
             except websockets.exceptions.ConnectionClosed:
                 disconnected.append(client)
+                logger.warning(f"Client disconnected during broadcast: {client.remote_address}")
         
         # Clean up disconnected clients
         for client in disconnected:
             self.remove_player(client)
             self.remove_spectator(client)
+            logger.info(f"Cleaned up disconnected client: {client.remote_address}")
 
 
 class ChessWebSocketServer:
@@ -161,6 +167,8 @@ class ChessWebSocketServer:
                 await self.handle_list_rooms(websocket)
             elif message_type == 'make_move':
                 await self.handle_make_move(websocket, data)
+            elif message_type == 'piece_captured':
+                await self.handle_piece_captured(websocket, data)
             elif message_type == 'game_state':
                 await self.handle_game_state(websocket, data)
             elif message_type == 'chat_message':
@@ -305,55 +313,56 @@ class ChessWebSocketServer:
         
         # Real-time mode: No turn checks needed
         
-        # Extract move data
-        move_data = {
+        # Get complete state info from client
+        state_info = data.get('state_info', {
+            'name': 'moving',
+            'speed': 1.0,
+            'is_rest': False,
+            'rest_duration': 0,
+            'activation_time': datetime.now().timestamp(),
+            'transitions': {}
+        })
+        
+        # Create piece info with state
+        piece_info = {
             'from': data.get('from'),
             'to': data.get('to'),
             'piece': data.get('piece'),
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': datetime.now().timestamp(),
+            'state_info': state_info,
             'player': player_color
         }
         
-        # Add move to history
-        room.game_state['moves_history'].append(move_data)
+        # Store move in history with state
+        room.game_state['moves_history'].append(piece_info)
         
-        # Real-time mode: No turn switching needed
+        # Update board and state tracking
+        if 'board' not in room.game_state:
+            room.game_state['board'] = {}
+        if 'piece_states' not in room.game_state:
+            room.game_state['piece_states'] = {}
+            
+        # Update board position
+        room.game_state['board'][piece_info['to']] = piece_info['piece']
+        # Track piece state
+        room.game_state['piece_states'][piece_info['piece']] = state_info
         
-        # Broadcast move to all clients in room
-        # Update game state with the move
-        move_from = move_data['from']
-        move_to = move_data['to']
-        piece_type = move_data['piece']
+        # Log detailed move info
+        logger.info(f"Broadcasting move with state:")
+        logger.info(f"  Piece: {piece_info['piece']}")
+        logger.info(f"  From: {piece_info['from']} → {piece_info['to']}")
+        logger.info(f"  State: {state_info['name']}")
+        logger.info(f"  Rest: {state_info['is_rest']}")
+        logger.info(f"  Rest Duration: {state_info['rest_duration']}ms")
         
-        # Update board state (without removing the source position in real-time mode)
-        room.game_state['board'][move_to] = room.game_state['board'].get(move_from)
-        
-        # Update piece state (don't clear previous states in real-time mode)
-        if 'pieces_state' not in room.game_state:
-            room.game_state['pieces_state'] = {}
-        
-        room.game_state['pieces_state'][move_data['piece']] = {
-            move_data['piece']: {
-                'position': move_to,
-                'is_moving': False,
-                'state': 'idle',
-                'last_move': {
-                    'from': move_from,
-                    'to': move_to,
-                    'timestamp': move_data['timestamp']
-                }
-            }
-        }
-        
-        # Broadcast move and updated state to all clients in room
+        # Broadcast move to all clients
         await room.broadcast_to_room({
             'type': 'move_made',
-            'move': move_data,
-            'game_state': room.game_state,
-            'piece_state': room.game_state['pieces_state']
+            'piece': piece_info,
+            'timestamp': datetime.now().isoformat()
         })
         
-        logger.info(f"Move made in room {room_id}: {move_data['from']} to {move_data['to']}")
+        logger.info(f"Move made in room {room_id}: {piece_info['from']} to {piece_info['to']}")
     
     async def handle_game_state(self, websocket: websockets.WebSocketServerProtocol, data: dict):
         """Handle real-time game state broadcast from client."""
@@ -402,6 +411,46 @@ class ChessWebSocketServer:
         
         await room.broadcast_to_room(chat_message)
     
+    async def handle_piece_captured(self, websocket: websockets.WebSocketServerProtocol, data: dict):
+        """Handle piece capture notification."""
+        room_id = self.client_rooms.get(websocket)
+        if not room_id or room_id not in self.rooms:
+            return
+            
+        room = self.rooms[room_id]
+        capture_data = data.get('piece', {})
+        piece_id = capture_data.get('id')
+        position = capture_data.get('position')
+        
+        if not piece_id or not position:
+            return
+            
+        # Update game state to reflect the capture
+        if 'captured_pieces' not in room.game_state:
+            room.game_state['captured_pieces'] = []
+            
+        room.game_state['captured_pieces'].append({
+            'piece_id': piece_id,
+            'position': position,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+        # If the piece exists in pieces_state, mark it as captured
+        if piece_id in room.game_state.get('pieces_state', {}):
+            room.game_state['pieces_state'][piece_id]['state'] = 'captured'
+        
+        # Broadcast capture to all clients
+        await room.broadcast_to_room({
+            'type': 'piece_captured',
+            'piece': {
+                'id': piece_id,
+                'position': position
+            },
+            'game_state': room.game_state
+        })
+        
+        logger.info(f"Piece captured in room {room_id}: {piece_id} at {position}")
+            
     async def cleanup_client(self, websocket: websockets.WebSocketServerProtocol):
         """Clean up when client disconnects."""
         room_id = self.client_rooms.get(websocket)
