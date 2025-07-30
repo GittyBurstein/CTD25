@@ -56,9 +56,14 @@ class NetworkGameManager:
         self.websocket_client.on_player_left = self._on_player_left
         self.websocket_client.on_game_state_received = self._on_game_state_received
         
-        # Setup periodic game state sync
+        # Add handlers for new server messages
+        self.websocket_client.on_authoritative_game_state = self._on_authoritative_game_state_received
+        self.websocket_client.on_periodic_sync = self._on_periodic_sync_received
+        self.websocket_client.on_game_state_update = self._on_game_state_update_received
+        
+        # Setup periodic game state sync (reduced frequency since server now manages state)
         self._sync_timer = 0
-        self._sync_interval = 200  # Sync every 200ms for better consistency
+        self._sync_interval = 1000  # Reduced to every 1 second since server manages state
         self.websocket_client.on_error = self._on_error
     
     def start_network_game(self, mode: str = "create", room_id: str = None):
@@ -102,26 +107,34 @@ class NetworkGameManager:
             return
         
         if event_type == MOVE_DONE:
-            # Send move to other players
+            # Send move to server for authoritative processing
             command = data.get('command')
             if command and hasattr(command, 'params') and len(command.params) >= 2:
-                from_pos = self._convert_position_to_notation(command.params[0])
-                to_pos = self._convert_position_to_notation(command.params[1])
-                piece = command.piece_id[:2] if command.piece_id else ''
+                from_pos = command.params[0]  # Keep as coordinates
+                to_pos = command.params[1]    # Keep as coordinates
+                piece_id = command.piece_id if hasattr(command, 'piece_id') else ''
                 
-                self.websocket_client.make_move(from_pos, to_pos, piece)
-                logger.info(f"Sent move to server: {from_pos} to {to_pos} (piece: {piece})")
+                # Send move to server for authoritative processing
+                self.websocket_client.make_move(from_pos, to_pos, piece_id)
+                logger.info(f"Sent move to server: {from_pos} to {to_pos} (piece: {piece_id})")
+                
+                # Don't process the move locally - wait for server response
+                # The server will send back the authoritative game state
+                
             else:
                 logger.warning("Invalid move data received from game")
                 
-        # Periodically sync full game state (less frequently)
+        # Since server now manages authoritative state, we don't need to send full state
+        # The server will send us updates via periodic sync
+        # Only send state occasionally for debugging/backup purposes
         current_time = self.game.game_time_ms()
         if not hasattr(self, '_last_sync_time'):
             self._last_sync_time = 0
-        if (current_time - self._last_sync_time > 1000 and  # Only sync every 1 second
+        if (current_time - self._last_sync_time > 5000 and  # Only sync every 5 seconds for backup
             hasattr(self, 'room_id') and self.room_id):  # And only if in a room
             self._last_sync_time = current_time
-            self._send_full_game_state()
+            # Don't send full state anymore - server is authoritative
+            # self._send_full_game_state()
     
     def _send_full_game_state(self):
         """Send complete game state to synchronize everything."""
@@ -184,6 +197,73 @@ class NetworkGameManager:
     
     def _on_game_state_received(self, state_data: dict):
         """Apply received game state to synchronize everything."""
+        # This is now handled by the new authoritative handlers
+        # Keep for backward compatibility but redirect to new handler
+        self._apply_authoritative_game_state(state_data)
+    
+    def _on_authoritative_game_state_received(self, message_data: dict):
+        """Handle authoritative game state from server."""
+        game_state = message_data.get('game_state', {})
+        self._apply_authoritative_game_state(game_state)
+    
+    def _on_periodic_sync_received(self, message_data: dict):
+        """Handle periodic sync from server."""
+        game_state = message_data.get('game_state', {})
+        self._apply_authoritative_game_state(game_state)
+    
+    def _on_game_state_update_received(self, message_data: dict):
+        """Handle game state update after a move."""
+        game_state = message_data.get('game_state', {})
+        move_data = message_data.get('move', {})
+        
+        logger.info(f"Received move update: {move_data}")
+        self._apply_authoritative_game_state(game_state)
+    
+    def _apply_authoritative_game_state(self, state_data: dict):
+        """Apply the authoritative game state from server."""
+        try:
+            # Check if data is wrapped in 'state' key (from server)
+            if 'pieces' not in state_data and 'state' in state_data:
+                state_data = state_data['state']
+                
+            pieces_state = state_data.get('pieces', {})
+            
+            # Apply piece positions and states from server
+            for piece_id, piece_data in pieces_state.items():
+                if piece_id in self.game.pieces:
+                    piece = self.game.pieces[piece_id]
+                    server_pos = piece_data.get('position', piece.current_state.physics.current_board_cell)
+                    server_state = piece_data.get('state', 'idle')
+                    is_moving = piece_data.get('is_moving', False)
+                    target_pos = piece_data.get('target_position', server_pos)
+                    
+                    # Only update if position actually changed
+                    current_pos = piece.current_state.physics.current_board_cell
+                    if current_pos != server_pos:
+                        piece.current_state.physics.current_board_cell = server_pos
+                        piece.current_state.physics.target_board_cell = target_pos
+                        
+                        # Handle captured pieces (moved off board)
+                        if server_pos == (-1, -1):
+                            logger.info(f"Piece {piece_id} was captured")
+                            # Hide captured piece
+                            piece.current_state.physics.current_board_cell = (-1, -1)
+                        
+                        logger.debug(f"Updated piece {piece_id} position: {current_pos} -> {server_pos}")
+            
+            # Update game statistics if provided
+            game_stats = state_data.get('game_stats', {})
+            if game_stats and hasattr(self.game, 'score_manager'):
+                scores = game_stats.get('scores', {})
+                if scores:
+                    # Update local score manager with server data
+                    pass  # Score manager updates handled by server
+                    
+        except Exception as e:
+            logger.error(f"Failed to apply authoritative game state: {e}")
+
+    def _on_old_game_state_received(self, state_data: dict):
+        """OLD: Apply received game state to synchronize everything."""
         try:
             # Check if data is wrapped in 'state' key (from server)
             if 'pieces' not in state_data and 'state' in state_data:
