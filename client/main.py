@@ -8,7 +8,7 @@ def main():
         pygame.init()
         pygame.display.init()
         
-        begin_image = pygame.image.load("pictures/begin.jpg")
+        begin_image = pygame.image.load("client/pictures/begin.jpg")
         screen = pygame.display.set_mode((1024, 768))
         pygame.display.set_caption("🎮 Chess Game Starting...")
         

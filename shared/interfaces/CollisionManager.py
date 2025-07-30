@@ -3,8 +3,8 @@ CollisionManager - Manages piece collisions and captures
 Handles all logic related to piece collisions, captures, and movement blocking
 """
 from typing import Dict, List
-from .Piece import Piece
-from .Command import Command
+from Piece import Piece
+from Command import Command
 
 class CollisionManager:
     def __init__(self, event_bus=None):

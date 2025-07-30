@@ -8,9 +8,9 @@ Quick test to verify that invalid move sound plays correctly.
 
 import pygame
 import time
-from EventBus import EventBus
-from SoundManager import SoundManager
-from EventTypes import INVALID_MOVE
+from It1_interfaces.EventBus import EventBus
+from It1_interfaces.SoundManager import SoundManager
+from It1_interfaces.EventTypes import INVALID_MOVE
 
 def test_invalid_move_sound():
     """Test that invalid move sound plays correctly"""

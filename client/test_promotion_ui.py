@@ -8,7 +8,7 @@ Quick test to see how the promotion popup looks.
 
 import pygame
 import sys
-from PromotionUI import PromotionUI
+from It1_interfaces.PromotionUI import PromotionUI
 
 def test_promotion_ui():
     """Test the promotion UI display."""

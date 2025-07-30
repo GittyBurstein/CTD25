@@ -13,7 +13,7 @@ from unittest.mock import Mock
 # Add the project root to the path
 sys.path.append(str(Path(__file__).parent))
 
-from ChessRulesValidator import ChessRulesValidator
+from It1_interfaces.ChessRulesValidator import ChessRulesValidator
 
 def test_promotion_detection():
     """Test if promotion detection works correctly."""

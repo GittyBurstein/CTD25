@@ -16,8 +16,8 @@ Test the complet    print("All promotion system tests completed!")
 import pygame
 import sys
 from unittest.mock import Mock
-from ChessRulesValidator import ChessRulesValidator
-from Command import Command
+from It1_interfaces.ChessRulesValidator import ChessRulesValidator
+from It1_interfaces.Command import Command
 
 def test_promotion_detection():
     """Test pawn promotion detection."""
@@ -77,7 +77,7 @@ def test_promotion_ui_mock():
     # Initialize pygame for font rendering
     pygame.init()
     
-    from PromotionUI import PromotionUI
+    from It1_interfaces.PromotionUI import PromotionUI
     
     # Create promotion UI
     ui = PromotionUI(800, 600)

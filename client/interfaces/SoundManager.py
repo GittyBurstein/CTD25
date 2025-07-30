@@ -9,11 +9,11 @@ class SoundManager:
     
     # Sound configuration constants
     DEFAULT_SOUNDS = {
-        MOVE_DONE: "sounds/5movement0.wav",
-        PIECE_CAPTURED: "sounds/gan.wav",
-        GAME_ENDED: "sounds/applause.mp3",
-        GAME_STARTED: "sounds/1TADA.WAV",
-        INVALID_MOVE: "sounds/fail.mp3"
+        MOVE_DONE: "client/sounds/5movement0.wav",
+        PIECE_CAPTURED: "client/sounds/gan.wav",
+        GAME_ENDED: "client/sounds/applause.mp3",
+        GAME_STARTED: "client/sounds/1TADA.WAV",
+        INVALID_MOVE: "client/sounds/fail.mp3"
     }
     
     def __init__(self, volume: float = 0.5):

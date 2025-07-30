@@ -12,16 +12,16 @@ from pathlib import Path
 # Add the project root to the path
 sys.path.append(str(Path(__file__).parent))
 
-from PieceFactory import PieceFactory
-from Board import Board
-from ChessRulesValidator import ChessRulesValidator
+from It1_interfaces.PieceFactory import PieceFactory
+from It1_interfaces.Board import Board
+from It1_interfaces.ChessRulesValidator import ChessRulesValidator
 
 def debug_piece_properties():
     """Debug actual piece properties to see if promotion detection works."""
     print("🔍 Debugging Actual Game Pieces...")
     
     # Create board and piece factory
-    from img import Img
+    from It1_interfaces.img import Img
     import numpy as np
     
     # Create a dummy board image

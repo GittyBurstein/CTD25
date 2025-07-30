@@ -10,16 +10,17 @@ from pathlib import Path
 
 def setup_paths():
     """Add all necessary paths to sys.path"""
-    base_path = Path(__file__).parent.absolute()
+    base_path = Path(__file__).parent.parent.absolute()
     
     # Add client, server, and shared paths
     paths_to_add = [
-        base_path / "client" / "interfaces",
-        base_path / "server" / "interfaces", 
         base_path / "shared" / "interfaces",
+        base_path / "client" / "interfaces",
+        base_path / "server" / "interfaces",
         base_path / "shared",
         base_path / "client",
-        base_path / "server"
+        base_path / "server",
+        base_path
     ]
     
     for path in paths_to_add:
