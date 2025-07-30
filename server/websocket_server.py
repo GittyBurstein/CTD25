@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class ChessGameRoom:
-    """Represents a chess game room with two players."""
+    """Represents a real-time chess game room with two players."""
     
     def __init__(self, room_id: str):
         self.room_id = room_id
@@ -25,10 +25,10 @@ class ChessGameRoom:
         self.spectators: Set[websockets.WebSocketServerProtocol] = set()
         self.game_state = {
             'board': self._initialize_board(),
-            'current_player': 'white',
             'moves_history': [],
             'game_status': 'waiting',  # waiting, active, finished
-            'winner': None
+            'winner': None,
+            'last_update': datetime.now().timestamp()
         }
         self.created_at = datetime.now()
     
@@ -40,6 +40,27 @@ class ChessGameRoom:
             'a2': 'pw', 'b2': 'pw', 'c2': 'pw', 'd2': 'pw', 'e2': 'pw', 'f2': 'pw', 'g2': 'pw', 'h2': 'pw',
             'a1': 'rw', 'b1': 'nw', 'c1': 'bw', 'd1': 'qw', 'e1': 'kw', 'f1': 'bw', 'g1': 'nw', 'h1': 'rw'
         }
+        
+    def update_game_state(self, state_data: dict):
+        """Update game state from client data."""
+        if not state_data:
+            return
+            
+        # Update piece positions and states
+        if 'pieces' in state_data:
+            self.game_state['pieces'] = state_data['pieces']
+            
+        # Update selections
+        if 'selections' in state_data:
+            self.game_state['selections'] = state_data['selections']
+            
+        # Update game stats
+        if 'game_stats' in state_data:
+            self.game_state['stats'] = state_data['game_stats']
+            
+        # Update game time
+        if 'game_time' in state_data:
+            self.game_state['time'] = state_data['game_time']
     
     def add_player(self, websocket: websockets.WebSocketServerProtocol) -> bool:
         """Add a player to the room. Returns True if successful, False if room is full."""
@@ -282,12 +303,7 @@ class ChessWebSocketServer:
             })
             return
         
-        if room.game_state['current_player'] != player_color:
-            await self.send_message(websocket, {
-                'type': 'error',
-                'message': 'Not your turn'
-            })
-            return
+        # Real-time mode: No turn checks needed
         
         # Extract move data
         move_data = {
@@ -301,37 +317,72 @@ class ChessWebSocketServer:
         # Add move to history
         room.game_state['moves_history'].append(move_data)
         
-        # Switch turns
-        room.game_state['current_player'] = 'black' if player_color == 'white' else 'white'
+        # Real-time mode: No turn switching needed
         
         # Broadcast move to all clients in room
+        # Update game state with the move
+        move_from = move_data['from']
+        move_to = move_data['to']
+        piece_type = move_data['piece']
+        
+        # Update board state (without removing the source position in real-time mode)
+        room.game_state['board'][move_to] = room.game_state['board'].get(move_from)
+        
+        # Update piece state (don't clear previous states in real-time mode)
+        if 'pieces_state' not in room.game_state:
+            room.game_state['pieces_state'] = {}
+        
+        room.game_state['pieces_state'][move_data['piece']] = {
+            move_data['piece']: {
+                'position': move_to,
+                'is_moving': False,
+                'state': 'idle',
+                'last_move': {
+                    'from': move_from,
+                    'to': move_to,
+                    'timestamp': move_data['timestamp']
+                }
+            }
+        }
+        
+        # Broadcast move and updated state to all clients in room
         await room.broadcast_to_room({
             'type': 'move_made',
             'move': move_data,
-            'game_state': room.game_state
+            'game_state': room.game_state,
+            'piece_state': room.game_state['pieces_state']
         })
         
         logger.info(f"Move made in room {room_id}: {move_data['from']} to {move_data['to']}")
     
     async def handle_game_state(self, websocket: websockets.WebSocketServerProtocol, data: dict):
-        """Handle game state broadcast from client."""
+        """Handle real-time game state broadcast from client."""
         room_id = self.client_rooms.get(websocket)
         if not room_id or room_id not in self.rooms:
-            return  # Don't even respond with error to reduce noise
+            return
         
         room = self.rooms[room_id]
-        state_data = data.get('state', {})
-        
-        # Only broadcast if there are other players in the room
         if len(room.players) < 2:
-            return  # No broadcast needed
+            return  # No broadcast needed if playing alone
         
-        # Stop infinite message loops! 
-        # We receive the state but don't broadcast it back
-        # Clients already know how to update themselves
+        state_data = data.get('state', {})
+        if not state_data:
+            return
+            
+        # Update server's game state
+        room.update_game_state(state_data)
         
-        # Just acknowledge receipt without broadcasting
-        logger.debug(f"Game state received in room {room_id} - NOT broadcasting to prevent infinite loop")
+        # Add timestamp to state
+        state_data['timestamp'] = datetime.now().timestamp()
+        state_data['from_player'] = room.get_player_color(websocket)
+        
+        # Broadcast to other players immediately (real-time game)
+        await room.broadcast_to_room({
+            'type': 'game_state',
+            'state': state_data
+        }, exclude=websocket)  # Don't send back to sender
+        
+        logger.debug(f"Real-time state update in room {room_id} from {state_data['from_player']}")
     
     async def handle_chat_message(self, websocket: websockets.WebSocketServerProtocol, data: dict):
         """Handle chat message from client."""

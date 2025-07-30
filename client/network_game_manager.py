@@ -31,19 +31,21 @@ class NetworkGameManager:
         self.event_bus = event_bus
         self.websocket_client = ChessWebSocketClient()
         self.is_network_game = False
-        self.is_my_turn = False
-        self.my_color = None
+        self.my_color = None  # Just for player identification
+        self.last_state_time = 0  # For tracking state updates
         
         # Setup WebSocket event handlers
         self._setup_websocket_handlers()
         
-        # Subscribe to game events
+        # Subscribe to game events - in real-time mode, we track everything
         self.event_bus.subscribe(MOVE_DONE, self)
         self.event_bus.subscribe(PIECE_CAPTURED, self)
         self.event_bus.subscribe("PIECE_SELECTED", self)
         self.event_bus.subscribe("PIECE_DESELECTED", self)
+        self.event_bus.subscribe("PIECE_MOVING", self)  # Track piece movements
+        self.event_bus.subscribe("RENDER_FRAME", self)  # For UI updates
         
-        logger.info("Network Game Manager initialized")
+        logger.info("Real-time Network Game Manager initialized")
     
     def _setup_websocket_handlers(self):
         """Setup WebSocket event handlers."""
@@ -98,9 +100,14 @@ class NetworkGameManager:
     
     def handle_event(self, event_type: str, data: dict):
         """Handle game events for network synchronization."""
+        if event_type == "RENDER_FRAME":
+            self.draw_room_info()
+            return
+            
         if not self.is_network_game:
             return
         
+        # In real-time mode (Kung Fu Chess), we send all moves immediately
         if event_type == MOVE_DONE:
             # Send move to other players
             command = data.get('command')
@@ -118,7 +125,7 @@ class NetworkGameManager:
         current_time = self.game.game_time_ms()
         if not hasattr(self, '_last_sync_time'):
             self._last_sync_time = 0
-        if (current_time - self._last_sync_time > 1000 and  # Only sync every 1 second
+        if (current_time - self._last_sync_time > 100 and  # Sync more frequently (every 100ms)
             hasattr(self, 'room_id') and self.room_id):  # And only if in a room
             self._last_sync_time = current_time
             self._send_full_game_state()
@@ -127,61 +134,180 @@ class NetworkGameManager:
         """Send complete game state to synchronize everything."""
         try:
             if not self.websocket_client.is_connected:
+                logger.warning("Can't send state - not connected")
                 return
                 
             # Don't send state if we're not in a room or waiting for players
             if not hasattr(self, 'room_id') or not self.room_id:
+                logger.warning("Can't send state - no room")
                 return
                 
             # Get all piece positions and states
             pieces_state = {}
             for piece_id, piece in self.game.pieces.items():
+                # Get current cell coordinates
+                curr_pos = piece.current_state.physics.current_board_cell
+                target_pos = piece.current_state.physics.target_board_cell
+                
                 pieces_state[piece_id] = {
-                    'position': piece.current_state.physics.current_board_cell,
+                    'position': curr_pos,
                     'state': piece.current_state.current_state_name,
                     'is_moving': piece.current_state.physics.is_currently_moving,
-                    'target_position': piece.current_state.physics.target_board_cell
+                    'target_position': target_pos,
+                    'last_update': self.game.game_time_ms()
+                }
+                logger.debug(f"Piece {piece_id} state: pos={curr_pos}, target={target_pos}, moving={piece.current_state.physics.is_currently_moving}")
+            
+            # Get player selections with full info
+            selections = {}
+            all_selections = self.game.input_manager.get_all_selections()
+            for player, sel in all_selections.items():
+                selections[player] = {
+                    'pos': sel['pos'],
+                    'selected_piece_id': sel['selected'].piece_id if sel['selected'] else None,
+                    'last_update': self.game.game_time_ms()
                 }
             
-            # Get player selections
-            selections = self.game.input_manager.get_all_selections()
+            # Get detailed game stats
+            game_stats = {
+                'game_time': self.game.game_time_ms(),
+                'last_sync': self.game.game_time_ms()
+            }
             
-            # Get game stats
-            game_stats = {}
+            # Add score if available
             if hasattr(self.game, 'score_manager'):
                 game_stats['scores'] = self.game.score_manager.get_score()
             
+            # Add move history if available
             if hasattr(self.game, 'move_logger'):
                 game_stats['moves_log'] = {
                     'A': self.game.move_logger.get_recent_moves_for_player('A'),
                     'B': self.game.move_logger.get_recent_moves_for_player('B')
                 }
             
+            # Create complete state with timing info
             game_state = {
                 'type': 'game_state',
                 'state': {
                     'pieces': pieces_state,
-                    'selections': {
-                        'A': {
-                            'pos': selections['A']['pos'],
-                            'selected_piece_id': selections['A']['selected'].piece_id if selections['A']['selected'] else None
-                        },
-                        'B': {
-                            'pos': selections['B']['pos'], 
-                            'selected_piece_id': selections['B']['selected'].piece_id if selections['B']['selected'] else None
-                        }
-                    },
+                    'selections': selections,
                     'game_stats': game_stats,
                     'game_time': self.game.game_time_ms(),
-                    'player': self.my_color
+                    'player': self.my_color,
+                    'sync_time': self.game.game_time_ms(),
+                    'room_id': self.room_id
                 }
             }
+            
+            # Log state for debugging
+            logger.debug(f"Sending game state update:")
+            logger.debug(f"- Pieces: {len(pieces_state)} pieces")
+            logger.debug(f"- Selections: {len(selections)} players")
+            logger.debug(f"- Game time: {game_stats.get('game_time')}")
             
             self.websocket_client.send_message(game_state)
             
         except Exception as e:
             logger.error(f"Failed to send game state: {e}")
     
+    def _on_move_received(self, move_data: dict, piece_state: dict = None):
+        """Handle move received from other player."""
+        try:
+            if not self.is_network_game or not move_data:
+                return
+                
+            # Convert network position notation to game coordinates
+            from_pos = self._convert_notation_to_position(move_data.get('from', ''))
+            to_pos = self._convert_notation_to_position(move_data.get('to', ''))
+            piece_id = move_data.get('piece', '')
+            
+            logger.info(f"📥 Processing opponent's move: {piece_id} {from_pos} → {to_pos}")
+            
+            # Find the piece that needs to be moved
+            for pid, piece in self.game.pieces.items():
+                if pid.startswith(piece_id) and self._get_piece_pos(piece) == from_pos:
+                    from Command import Command
+                    current_time = self.game.game_time_ms()
+                    move_cmd = Command(current_time, pid, "move", [from_pos, to_pos])
+                    
+                    # Apply the move
+                    new_state = piece.current_state.get_state_after_command(move_cmd, current_time)
+                    if new_state:
+                        # Log the state change
+                        logger.info(f"Network move for {pid}:")
+                        logger.info(f"  From: {from_pos} -> {to_pos}")
+                        logger.info(f"  Old state: {piece.current_state.current_state_name}")
+                        logger.info(f"  New state: {new_state.current_state_name}")
+                        
+                        piece.current_state = new_state
+                        
+                        # Update piece state if provided
+                        if piece_state and pid in piece_state:
+                            self._apply_piece_state(piece, piece_state[pid])
+                            logger.info(f"  Applied additional state: {piece_state[pid]}")
+                    else:
+                        logger.warning(f"Failed to apply move for {pid}: {from_pos} -> {to_pos}")
+                    break
+            
+        except Exception as e:
+            logger.error(f"Error handling network move: {e}")
+            
+    def _get_piece_pos(self, piece) -> tuple:
+        """Get current position of a piece."""
+        return piece.current_state.physics.current_board_cell if piece else None
+        
+    def _log_piece_update(self, piece_id: str, old_pos: tuple, new_pos: tuple, piece_data: dict):
+        """Log detailed piece state updates."""
+        logger.info(f"\n=== Piece {piece_id} Network Sync ===")
+        if old_pos != new_pos:
+            logger.info(f"Position: {old_pos} -> {new_pos}")
+        if 'target_position' in piece_data:
+            logger.info(f"Target Position: {piece_data['target_position']}")
+        if 'is_moving' in piece_data:
+            logger.info(f"Moving State: {piece_data['is_moving']}")
+        if 'state' in piece_data:
+            logger.info(f"Game State: {piece_data['state']}")
+        logger.info("================================")
+
+    def draw_room_info(self):
+        """Display room information on the game board."""
+        if not hasattr(self.game, 'graphics') or not self.room_id:
+            return
+            
+        info_text = f"Room ID: {self.room_id}"
+        # Draw text in white at the top-left corner
+        try:
+            from interfaces.GraphicsFactory import get_graphics_instance
+            graphics = get_graphics_instance()
+            graphics.draw_text(info_text, (10, 10), color=(255, 255, 255), size=24, bold=True)
+        except Exception as e:
+            logger.error(f"Failed to draw room info: {e}")
+        
+    def _apply_piece_state(self, piece, state_data: dict, current_time: int = None):
+        """Apply received piece state."""
+        if not state_data:
+            return
+            
+        old_state = piece.current_state.current_state_name
+        old_moving = piece.current_state.physics.is_currently_moving
+            
+        # Update piece state with time
+        if 'state' in state_data:
+            piece.current_state.current_state_name = state_data['state']
+            if current_time:
+                piece.current_state._state_start_time = current_time
+            
+        # Update movement state
+        if 'is_moving' in state_data:
+            piece.current_state.physics.is_currently_moving = state_data['is_moving']
+            
+        # Log state changes for debugging
+        if 'state' in state_data and old_state != state_data['state']:
+            logger.info(f"Piece {piece.piece_id} state changed: {old_state} -> {state_data['state']}")
+            
+        if 'is_moving' in state_data and old_moving != state_data['is_moving']:
+            logger.info(f"Piece {piece.piece_id} movement changed: {old_moving} -> {state_data['is_moving']}")
+            
     def _on_game_state_received(self, state_data: dict):
         """Apply received game state to synchronize everything."""
         try:
@@ -190,10 +316,20 @@ class NetworkGameManager:
                 state_data = state_data['state']
                 
             player = state_data.get('player', 'unknown')
+            sync_time = state_data.get('sync_time', 0)
             
+            # Check if this is newer state than what we have
+            if hasattr(self, '_last_sync_time') and sync_time <= self._last_sync_time:
+                logger.debug(f"Ignoring older state update from {player}")
+                return
+                
             # Don't apply our own state
             if player == self.my_color:
+                logger.debug("Ignoring own state update")
                 return
+                
+            self._last_sync_time = sync_time
+            logger.info(f"Applying state update from {player} at time {sync_time}")
                 
             pieces_state = state_data.get('pieces', {})
             selections_state = state_data.get('selections', {})
@@ -208,6 +344,9 @@ class NetworkGameManager:
                     # Update position
                     new_pos = tuple(piece_data['position'])
                     old_pos = piece.current_state.physics.current_board_cell
+                    
+                    # Log before update
+                    self._log_piece_update(piece_id, old_pos, new_pos, piece_data)
                     
                     # Update the piece position
                     piece.current_state.physics.current_board_cell = new_pos
@@ -481,11 +620,12 @@ class NetworkGameManager:
         print(f"❌ Network error: {error_message}")
     
     def get_network_status(self) -> dict:
-        """Get current network game status."""
+        """Get current network game status for real-time game."""
         return {
             'is_network_game': self.is_network_game,
             'connected': self.websocket_client.is_connected(),
             'room_info': self.websocket_client.get_room_info(),
             'my_color': self.my_color,
-            'is_my_turn': self.is_my_turn
+            'mode': 'real-time',  # Always real-time for Kung Fu Chess
+            'last_sync': getattr(self, 'last_state_time', 0)
         }
