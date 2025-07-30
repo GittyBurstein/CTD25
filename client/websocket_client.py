@@ -45,6 +45,11 @@ class ChessWebSocketClient:
         self.on_error: Optional[Callable[[str]]] = None
         self.on_game_state_received: Optional[Callable[[Dict]]] = None
         
+        # New authoritative server callbacks
+        self.on_authoritative_game_state: Optional[Callable[[Dict]]] = None
+        self.on_periodic_sync: Optional[Callable[[Dict]]] = None
+        self.on_game_state_update: Optional[Callable[[Dict]]] = None
+        
         # Background thread for websocket communication
         self.websocket_thread: Optional[threading.Thread] = None
         self.should_stop = False
@@ -218,6 +223,22 @@ class ChessWebSocketClient:
             logger.info(f"Game state received with {len(state_data.get('pieces', []))} pieces")
             if self.on_game_state_received:
                 self.on_game_state_received(state_data)
+        
+        elif message_type == 'authoritative_game_state':
+            logger.debug("Authoritative game state received from server")
+            if hasattr(self, 'on_authoritative_game_state') and self.on_authoritative_game_state:
+                self.on_authoritative_game_state(data)
+        
+        elif message_type == 'periodic_sync':
+            logger.debug("Periodic sync received from server")
+            if hasattr(self, 'on_periodic_sync') and self.on_periodic_sync:
+                self.on_periodic_sync(data)
+        
+        elif message_type == 'game_state_update':
+            move_data = data.get('move', {})
+            logger.info(f"Game state update received for move: {move_data.get('from')} to {move_data.get('to')}")
+            if hasattr(self, 'on_game_state_update') and self.on_game_state_update:
+                self.on_game_state_update(data)
                 
         elif message_type == 'pong':
             logger.debug("Received pong from server")
